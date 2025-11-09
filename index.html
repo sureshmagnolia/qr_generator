@@ -105,15 +105,16 @@
             /* 8px */
         }
 
-        /* MODIFIED: Footer note for QRit */
+        /* MODIFIED: Footer note for QRit - Smaller and italicized */
         .footer-note {
             text-align: center;
-            font-size: 0.5rem; /* 8px */
+            font-size: 0.45rem; /* Made slightly smaller */
             line-height: 1.2;
             white-space: normal; /* Allow wrapping */
             opacity: 0.85;
             overflow-wrap: break-word;
             word-break: break-word;
+            font-style: italic; /* Added italics */
         }
 
         /*
@@ -773,12 +774,17 @@
                     labelCard.style.color = textColor;
                     labelCard.style.borderColor = textColor;
 
-                    // --- 2. Institution Name (Optional) ---
+                    // --- 2. Institution Name (Optional, with Separator) ---
                     if (institutionName) {
                         const institutionDiv = document.createElement('div');
-                        // Use base styles, color will be inherited
+                        // Use center alignment and bold text
                         institutionDiv.className = 'institution-name-box text-center font-bold text-base'; 
                         
+                        // ADDED: Separator line and spacing
+                        institutionDiv.style.borderBottom = `1px solid ${textColor}`; 
+                        institutionDiv.style.paddingBottom = '0.5rem';
+                        institutionDiv.style.marginBottom = '0.5rem';
+
                         const institutionP = document.createElement('p');
                         institutionP.className = 'institution-name'; 
                         institutionP.style.overflowWrap = 'break-word'; 
@@ -938,6 +944,10 @@
                     }
                     .footer-box {
                         border-top-color: ${textColor} !important;
+                    }
+                    /* Ensure the custom header line respects theme color */
+                    .institution-name-box {
+                        border-bottom-color: ${textColor} !important;
                     }
 
                     /* Ensure text doesn't overflow */
@@ -1111,3 +1121,4 @@
 </body>
 
 </html>
+
