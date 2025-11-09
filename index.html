@@ -1133,6 +1133,22 @@
                         overflow-wrap: break-word;
                         word-break: break-word;
                     }
+                    
+                    /* FIX: Lock QR Code Position */
+                    .label-content-wrapper {
+                        /* Force grid behavior */
+                        display: grid !important; 
+                        grid-template-columns: 1fr 100px !important;
+                    }
+                    .label-qr-code {
+                        /* Lock size and position */
+                        width: 100px !important;
+                        height: 100px !important;
+                        display: flex !important;
+                        justify-content: center !important;
+                        align-items: center !important;
+                    }
+
                     /* === END === */
                 }
             `;
