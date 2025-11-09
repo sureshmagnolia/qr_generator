@@ -52,6 +52,7 @@
             flex-direction: column;
             gap: 0.5rem;
             /* Center-align common and vernacular names */
+            min-width: 0; /* FIX: Prevents text overflow from breaking grid */
         }
 
         /* MODIFIED: Separated common and vernacular for unique font */
@@ -224,28 +225,67 @@
                     </button>
                 </div>
 
-                <!-- Print Section -->
+                <!-- ===== REFACTORED PRINT SECTION ===== -->
                 <div id="print-controls" class="pt-6 border-t border-gray-200 hidden">
                     <h3 class="text-lg font-semibold text-gray-700 mb-3">Print Options</h3>
                     <div class="space-y-4">
+                        
+                        <!-- Paper Size -->
                         <div>
-                            <label for="printLayout" class="block text-sm font-medium text-gray-700 mb-1">
-                                Select Print Layout
+                            <label for="paperSize" class="block text-sm font-medium text-gray-700 mb-1">
+                                Paper Size
                             </label>
-                            <select id="printLayout"
+                            <select id="paperSize"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 bg-white">
-                                <option value="a4_2_up">A4 Landscape - 2 Labels per Page</option>
-                                <option value="a4_10_up">A4 Portrait - 10 Labels (2 Col x 5)</option>
-                                <option value="a3_4_up">A3 Portrait - 4 Labels per Page</option>
-                                <option value="a3_20_up">A3 Portrait - 20 Labels (2 Col x 5)</option>
+                                <option value="A4" selected>A4</option>
+                                <option value="A3">A3</option>
                             </select>
                         </div>
+
+                        <!-- Orientation -->
+                        <div>
+                            <label for="paperOrientation" class="block text-sm font-medium text-gray-700 mb-1">
+                                Orientation
+                            </label>
+                            <select id="paperOrientation"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 bg-white">
+                                <option value="portrait" selected>Portrait</option>
+                                <option value="landscape">Landscape</option>
+                            </select>
+                        </div>
+
+                        <!-- Columns -->
+                        <div>
+                            <label for="numColumns" class="block text-sm font-medium text-gray-700 mb-1">
+                                Columns
+                            </label>
+                            <select id="numColumns"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 bg-white">
+                                <option value="1">1 Column (Large Labels)</option>
+                                <option value="2" selected>2 Columns (Small Labels)</option>
+                            </select>
+                        </div>
+
+                        <!-- Print Button -->
                         <button id="printBtn"
                             class="w-full bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 shadow-sm">
-                            Print Labels
+                            Print / Download as PDF
                         </button>
+                        <p class="text-xs text-gray-500 text-center -mt-2">
+                            For multi-page, paginated PDF. Use "Save as PDF" in the print dialog.
+                        </p>
+                        
+                        <!-- NEW PDF BUTTON -->
+                        <button id="downloadPdfBtn"
+                            class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                            Download as PDF (Screenshot)
+                        </button>
+                        <p class="text-xs text-gray-500 text-center -mt-2">
+                            For a quick single-page screenshot of the labels.
+                        </p>
                     </div>
                 </div>
+                <!-- ===== END REFACTORED PRINT SECTION ===== -->
 
             </div>
         </div>
@@ -297,6 +337,10 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
+    <!-- ADDED: LIBRARIES FOR PDF SCREENSHOT -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 
     <script>
         // --- CONFIGURATION ---
@@ -329,8 +373,16 @@
         const textColorPicker = document.getElementById('textColor');
         const printControls = document.getElementById('print-controls');
         const printBtn = document.getElementById('printBtn');
-        const printLayoutSelect = document.getElementById('printLayout');
         const printStyles = document.getElementById('print-styles');
+
+        // NEW Print DOM Elements
+        const paperSizeSelect = document.getElementById('paperSize');
+        const paperOrientationSelect = document.getElementById('paperOrientation');
+        const numColumnsSelect = document.getElementById('numColumns');
+        
+        // NEW PDF Button Element
+        const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+
 
         // --- INITIALIZATION ---
         // Start polling immediately to check for libraries.
@@ -341,7 +393,12 @@
          * This polls every 100ms until libraries are ready.
          */
         function checkLibrariesAndInit() {
-            if (typeof Papa !== 'undefined' && typeof QRCode !== 'undefined') {
+            // ADDED: Check for jspdf and html2canvas
+            if (typeof Papa !== 'undefined' && 
+                typeof QRCode !== 'undefined' && 
+                typeof html2canvas !== 'undefined' && 
+                typeof jspdf !== 'undefined') {
+                
                 // Libraries are loaded, proceed with initialization
                 console.log('Libraries loaded, initializing app...');
                 initializeApp();
@@ -428,6 +485,9 @@
 
             // Print functionality
             printBtn.addEventListener('click', handlePrint);
+
+            // ADDED: New PDF download button listener
+            downloadPdfBtn.addEventListener('click', handleDownloadPdf);
         }
 
         /**
@@ -606,7 +666,8 @@
             if (!binomial || typeof binomial !== 'string') {
                 return 'N/A'; // Return a safe value
             }
-            const parts = binomial.split(' ');
+            // MODIFIED: Use trim() and split(/\s+/) to handle extra/multiple spaces
+            const parts = binomial.trim().split(/\s+/);
             if (parts.length >= 2) {
                 return `<span class="italic">${parts[0]} ${parts[1]}</span> ${parts.slice(2).join(' ')}`;
             }
@@ -773,8 +834,12 @@
          * Handle Print Button Click
          */
         function handlePrint() {
-            const layout = printLayoutSelect.value;
-            updatePrintStyles(layout);
+            // *** REFACTORED ***
+            const size = paperSizeSelect.value;
+            const orientation = paperOrientationSelect.value;
+            const columns = numColumnsSelect.value;
+            
+            updatePrintStyles(size, orientation, columns);
 
             setTimeout(() => {
                 window.print();
@@ -782,14 +847,75 @@
         }
 
         /**
+         * Handle PDF Screenshot Download
+         */
+        function handleDownloadPdf() {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4'); // Create a portrait A4 PDF
+            const target = document.getElementById('label-output');
+            
+            // Set button to loading state
+            downloadPdfBtn.textContent = 'Generating...';
+            downloadPdfBtn.disabled = true;
+
+            html2canvas(target, {
+                scale: 2, // Increase resolution
+                useCORS: true, // For any images
+                backgroundColor: null // Use element background
+            }).then(canvas => {
+                // --- START: MODIFIED PDF MARGIN LOGIC ---
+                const imgData = canvas.toDataURL('image/png');
+                const pdfWidth = 210; // A4 width
+                const pdfHeight = 297; // A4 height
+                const margin = 10; // 10mm margin on all sides
+
+                const contentWidth = pdfWidth - (margin * 2); // 190
+                const contentHeight = pdfHeight - (margin * 2); // 277
+                
+                const imgRatio = canvas.width / canvas.height;
+                const scaledImgHeight = contentWidth / imgRatio;
+                const scaledImgWidth = contentWidth;
+
+                let yPosition = margin; // Start at top margin
+                let totalImgHeight = scaledImgHeight;
+
+                // Add first page
+                pdf.addImage(imgData, 'PNG', margin, yPosition, scaledImgWidth, scaledImgHeight);
+                
+                totalImgHeight -= contentHeight; // Subtract the height of the content area
+
+                // Add new pages if content is long
+                while (totalImgHeight > 0) {
+                    pdf.addPage();
+                    yPosition = margin - totalImgHeight; // The new y-position is the top margin offset by how much image is left
+                    pdf.addImage(imgData, 'PNG', margin, yPosition, scaledImgWidth, scaledImgHeight);
+                    totalImgHeight -= contentHeight; // Subtract another content area's worth of height
+                }
+                // --- END: MODIFIED PDF MARGIN LOGIC ---
+                
+                pdf.save('plant-labels.pdf');
+                
+                // Reset button state
+                downloadPdfBtn.textContent = 'Download as PDF (Screenshot)';
+                downloadPdfBtn.disabled = false;
+            }).catch(err => {
+                console.error('Failed to generate PDF:', err);
+                // Reset button state
+                downloadPdfBtn.textContent = 'Download as PDF (Screenshot)';
+                downloadPdfBtn.disabled = false;
+            });
+        }
+
+
+        /**
          * Dynamically update the CSS for printing
          */
-        function updatePrintStyles(layout) {
+        function updatePrintStyles(size, orientation, columns) {
             // Base styles for all print layouts
             const baseStyles = `
-                @page {
-                    size: A4; /* Default */
-                    margin: 0;
+                /* ADDED: Robust box-sizing */
+                * {
+                    box-sizing: border-box;
                 }
                 body {
                     -webkit-print-color-adjust: exact !important;
@@ -810,16 +936,35 @@
                     flex-direction: column; /* Ensure flex for print */
                     gap: 5px; /* Adjust gap for print */
                     padding: 5mm;
+                    min-width: 0; 
+                    overflow-wrap: break-word; /* ADDED */
                 }
-                .label-content-wrapper { /* Style the wrapper for print */
-                    display: grid;
-                    grid-template-columns: 1fr 100px;
+                
+                /* ===== START: NEW FLEXBOX LAYOUT FOR PRINT ===== */
+                .label-content-wrapper { 
+                    display: flex; /* CHANGED TO FLEX */
                     gap: 5mm;
                     align-items: center;
                     width: 100%;
                 }
-                
-                /* MODIFIED: Added wrapper box and wrapping */
+                .label-text {
+                    flex-grow: 1;  /* Text container takes all available space */
+                    min-width: 0;  /* Allows text container to shrink */
+                    display: flex; /* ADDED */
+                    flex-direction: column; /* ADDED */
+                    gap: 0.25rem; /* ADDED */
+                }
+                .label-qr-code {
+                    flex-shrink: 0; /* Prevents QR code from shrinking */
+                    width: 100px;
+                    height: 100px;
+                }
+                .label-qr-code img {
+                    width: 100px;
+                    height: 100px;
+                }
+                /* ===== END: NEW FLEXBOX LAYOUT FOR PRINT ===== */
+
                 .institution-name-box {
                     border: 1px solid transparent !important; /* Transparent border */
                     padding: 2mm;
@@ -829,7 +974,7 @@
                     font-weight: bold;
                     font-size: 1.1rem;
                     overflow-wrap: break-word; /* Ensure wrapping */
-                    word-break: break-word;
+                    word-break: break-all; /* More aggressive break */
                 }
                 .footer-box {
                     border-top: 1px solid var(--label-text-color, black) !important;
@@ -839,43 +984,53 @@
                 .footer-note {
                     text-align: center;
                     font-size: 0.4rem; /* Made smaller */
-                    white-space: nowrap; /* Force to one line */
+                    overflow-wrap: break-word; /* *** FIX: REMOVED 'nowrap' *** */
                     opacity: 0.75;
                 }
                 .binomial-box {
                     /* MODIFIED: Transparent border */
                     border-color: transparent !important; 
                     overflow-wrap: break-word; /* Ensure wrapping in print */
+                    word-break: break-all; /* More aggressive break */
                 }
-                /* ADDED: Apply Anek Malayalam font to common name */
                 .common-name {
                     font-family: 'Anek Malayalam', sans-serif;
+                    overflow-wrap: break-word;
+                    word-break: break-all; /* More aggressive break */
                 }
-                .label-qr-code img {
-                    width: 100px;
-                    height: 100px;
+                .vernacular-name {
+                    overflow-wrap: break-word;
+                    word-break: break-all; /* More aggressive break */
                 }
             `;
 
-            // Styles for small (10-up, 20-up) labels
+            // Styles for small (2-column) labels
             const smallLabels = `
                 .label-card {
                     padding: 2mm;
                     gap: 2px;
                 }
+                /* ===== START: NEW FLEXBOX LAYOUT FOR PRINT (Small) ===== */
                 .label-content-wrapper {
-                    grid-template-columns: 1fr 80px; /* Smaller QR */
                     gap: 2mm;
                 }
-                /* MODIFIED: Added wrapper box and wrapping */
+                .label-qr-code {
+                    width: 80px; /* Smaller QR */
+                    height: 80px;
+                }
+                .label-qr-code img {
+                    width: 80px;
+                    height: 80px;
+                }
+                /* ===== END: NEW FLEXBOX LAYOUT FOR PRINT (Small) ===== */
+                
                 .institution-name-box {
                     padding: 1mm;
                 }
                 .institution-name {
                     font-size: 0.9rem;
                     margin-bottom: 1mm;
-                    overflow-wrap: break-word;
-                    word-break: break-word;
+                    word-break: break-all; /* More aggressive break */
                 }
                 .footer-box {
                     padding-top: 1mm;
@@ -883,67 +1038,58 @@
                 }
                 .footer-note {
                     font-size: 0.4rem; /* Stays small */
-                    white-space: nowrap; 
+                    overflow-wrap: break-word; /* *** FIX: REMOVED 'nowrap' *** */
                 }
-                .label-qr-code { width: 80px; height: 80px; }
                 .label-text { gap: 0.25rem; }
-                .binomial-box { font-size: 0.9rem; padding: 2mm; }
+                .binomial-box { 
+                    font-size: 0.9rem; 
+                    padding: 2mm; 
+                    word-break: break-all; /* ADDED */
+                }
                 .family-name { font-size: 0.8rem; }
-                /* MODIFIED: Added Anek font */
                 .common-name {
                     font-size: 1rem;
                     font-family: 'Anek Malayalam', sans-serif;
+                    word-break: break-all; /* ADDED */
                 }
-                .vernacular-name { font-size: 0.8rem; }
+                .vernacular-name { 
+                    font-size: 0.8rem; 
+                    word-break: break-all; /* ADDED */
+                }
             `;
 
+            // --- NEW DYNAMIC RULES ---
+            
+            // 1. Set Page Size and Orientation
+            let pageRule = `
+                @page { 
+                    size: ${size} ${orientation}; 
+                    margin: 10mm; 
+                }
+            `;
+
+            // 2. Set Columns and apply small styles if needed
             let specificStyles = '';
-
-            switch (layout) {
-                case 'a4_2_up':
-                    specificStyles = `
-                        @page { size: A4 landscape; margin: 10mm; }
-                        #label-output {
-                            grid-template-columns: 1fr 1fr;
-                            gap: 10mm;
-                        }
-                    `;
-                    break;
-                case 'a4_10_up':
-                    specificStyles = `
-                        @page { size: A4 portrait; margin: 10mm; }
-                        #label-output {
-                            grid-template-columns: 1fr 1fr;
-                            grid-template-rows: repeat(5, 1fr);
-                            gap: 5mm;
-                        }
-                        ${smallLabels}
-                    `;
-                    break;
-                case 'a3_4_up':
-                    specificStyles = `
-                        @page { size: A3 portrait; margin: 10mm; }
-                        #label-output {
-                            grid-template-columns: 1fr 1fr;
-                            grid-template-rows: 1fr 1fr;
-                            gap: 10mm;
-                        }
-                    `;
-                    break;
-                case 'a3_20_up':
-                    specificStyles = `
-                        @page { size: A3 portrait; margin: 10mm; }
-                        #label-output {
-                            grid-template-columns: 1fr 1fr;
-                            grid-template-rows: repeat(5, 1fr);
-                            gap: 10mm;
-                        }
-                        ${smallLabels}
-                    `;
-                    break;
+            
+            if (columns === '1') {
+                specificStyles = `
+                    #label-output {
+                        grid-template-columns: 1fr;
+                        gap: 10mm;
+                    }
+                `;
+            } else { // columns === '2'
+                specificStyles = `
+                    #label-output {
+                        grid-template-columns: 1fr 1fr;
+                        gap: 5mm;
+                    }
+                    ${smallLabels}
+                `;
             }
-
-            printStyles.innerHTML = baseStyles + specificStyles;
+            
+            // 3. Combine and apply
+            printStyles.innerHTML = baseStyles + pageRule + specificStyles;
         }
 
     </script>
