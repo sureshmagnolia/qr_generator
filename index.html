@@ -1,60 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plant QR Label Generator</title>
-    <!-- 1. Load Tailwind CSS for styling -->
+    <!-- 1. Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. Load qrcode.js library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
-    <!-- 3. Load PapaParse library for CSV handling -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    
+    <!-- 2. PapaParse and QRCode.js moved to end of <body> -->
+    <!-- 3. Load Inter font -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <!-- 4. Dynamic Print Styles - this will be populated by JavaScript -->
+    <style id="print-styles"></style>
+    <!-- 5. Base Styles -->
     <style>
-        /* Custom styles for the app */
         body {
             font-family: 'Inter', sans-serif;
         }
 
-        /* --- Modal Styles --- */
-        #addPlantModal {
-            transition: opacity 0.2s ease-in-out;
-        }
-        #modal-content {
-            transition: transform 0.2s ease-in-out;
-        }
-        
-        /* --- Search Result Styles --- */
-        #searchResults .search-item:hover {
-            background-color: #f3f4f6; /* gray-100 */
-        }
-        
-        /* --- Generated Label Styles --- */
-        #label-output {
-            /* Styles for printing */
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 1rem;
-        }
-
+        /* Base styles for the generated label card */
         .label-card {
-            border: 2px solid #1f2937; /* gray-800 */
+            border: 2px solid #1f2937;
+            /* gray-800 */
             border-radius: 0.5rem;
             padding: 0.75rem;
             background-color: white;
-            display: flex; /* CHANGED from grid */
-            flex-direction: column; /* ADDED */
-            gap: 0.5rem; /* CHANGED */
-            page-break-inside: avoid; /* Avoids breaking a label during printing */
-            /* align-items: center; <-- REMOVED, not needed for flex-col */
+            display: flex;
+            /* CHANGED */
+            flex-direction: column;
+            /* ADDED */
+            gap: 0.5rem;
+            /* CHANGED */
+            page-break-inside: avoid;
+            /* Avoids breaking a label during printing */
         }
 
-        .label-content-wrapper { /* ADDED this new wrapper class */
+        .label-content-wrapper {
+            /* This new wrapper holds the text and QR code */
             display: grid;
-            grid-template-columns: 1fr 100px; /* Text content | QR Code */
+            grid-template-columns: 1fr 100px;
+            /* Text content | QR Code */
             gap: 0.75rem;
             align-items: center;
             width: 100%;
@@ -64,562 +49,702 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            /* Ensure text wraps */
-            overflow-wrap: break-word;
-            word-wrap: break-word;
-            word-break: break-word;
-            min-width: 0; /* Important for flex/grid text wrapping */
+            /* Center-align common and vernacular names */
+        }
+
+        .label-text .common-name,
+        .label-text .vernacular-name {
+            text-align: center;
         }
 
         .binomial-box {
-            border: 1px solid #d1d5db; /* gray-300 */
+            border: 1px solid #d1d5db;
+            /* gray-300 */
             border-radius: 0.375rem;
             padding: 0.5rem;
             text-align: center;
             font-weight: 600;
-            overflow-wrap: break-word; /* ADDED to prevent overflow */
-            word-break: break-word; /* ADDED as a fallback */
+            overflow-wrap: break-word;
+            /* ADDED to prevent overflow */
+            word-break: break-word;
+            /* ADDED as a fallback */
         }
-        
+
         .label-qr-code {
             width: 100px;
             height: 100px;
-            flex-shrink: 0; /* Prevent QR code from shrinking */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        
+
         .label-qr-code img {
-            width: 100% !important;
-            height: 100% !important;
-            border-radius: 0.25rem;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
-        
-        /* --- Print Styles --- */
-        /* REMOVED @media print block from here */
-        
-    </style>
-    <style id="print-layout-style">
-        /* This will be filled by JavaScript for printing */
+
+        /* Footer Box */
+        .footer-box {
+            border-top: 1px solid #d1d5db;
+            /* gray-300 */
+            padding-top: 0.5rem;
+            /* 8px */
+            margin-top: 0.5rem;
+            /* 8px */
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 0.4rem;
+            /* Very small */
+            white-space: nowrap;
+            /* Force to one line */
+            opacity: 0.75;
+        }
+
+        /* Hide generated labels from screen view when printing */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            #label-output,
+            #label-output * {
+                visibility: visible;
+            }
+
+            #label-output {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
     </style>
 </head>
+
 <body class="bg-gray-100 min-h-screen p-4 sm:p-8">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-    <div class="max-w-4xl mx-auto">
-        
-        <!-- === MAIN CONTROL PANEL === -->
-        <div class="bg-white p-6 rounded-xl shadow-lg w-full no-print">
-            <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
-                Department of Botany, Government Victoria College, Palakkad - QRit - Plant QR Label Generator
-            </h1>
-            
-            <!-- Instructions -->
-            <div id="loading-state" class="text-center p-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg">
-                <p>Loading plant database from Google Sheet...</p>
-            </div>
-            
-            <div id="error-state" class="hidden text-center p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-                <p class="font-bold">Error Loading Database</p>
-                <p class="text-sm">Could not fetch data. Please check the `GOOGLE_SHEET_URL` in the script and ensure your sheet is "Published to the web" as a CSV.</p>
+        <!-- ===== Left Column: Control Panel ===== -->
+        <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit sticky top-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Plant Label Generator</h1>
+
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-4">
+                <p class="text-lg font-medium text-blue-600 animate-pulse">Loading Plant Database...</p>
+                <p class="text-sm text-gray-500">Please wait a moment.</p>
             </div>
 
-            <!-- Controls -->
-            <div id="controls" class="hidden space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Error State -->
+            <div id="error" class="hidden text-center py-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-lg font-medium text-red-600">Error Loading Data</p>
+                <p id="error-message" class="text-sm text-gray-600"></p>
+            </div>
+
+            <!-- Controls (Hidden until data is loaded) -->
+            <div id="controls" class="hidden space-y-6">
+                <!-- Add Plant Button -->
+                <div>
                     <button id="addPlantBtn"
-                            class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow-sm">
-                        1. Add Plant to List
+                        class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                        + Add Plants to List
                     </button>
-                    <button id="resetBtn"
-                            class="w-full bg-red-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                </div>
+
+                <!-- Selected Plants List -->
+                <div class="pt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold text-gray-700">Selected Plants</h3>
+                        <span id="plant-count"
+                            class="text-sm font-medium bg-gray-200 text-gray-700 px-2-5 py-0.5 rounded-full">0</span>
+                    </div>
+                    <div id="selected-plants-container"
+                        class="bg-gray-50 border border-gray-200 rounded-lg p-3 min-h-[100px] max-h-[300px] overflow-y-auto">
+                        <p id="empty-list-msg" class="text-gray-500 text-sm text-center pt-4">
+                            Your selected plants will appear here.
+                        </p>
+                        <ul id="selected-plants-list" class="space-y-2">
+                            <!-- Selected plants will be injected here by JS -->
+                        </ul>
+                    </div>
+                    <button id="resetListBtn"
+                        class="w-full text-sm text-red-600 hover:text-red-800 mt-2 text-center transition duration-150">
                         Reset List
                     </button>
                 </div>
-                
-                <!-- === ADDED: SELECTED PLANTS LIST === -->
-                <div class="pt-4">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Selected Plants (<span id="selected-count">0</span>)</h3>
-                    <div id="selected-plants-list" class="max-h-48 overflow-y-auto space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                        <!-- Selected plants will appear here -->
-                        <p id="empty-list-msg" class="text-gray-500 text-center py-4">Your plant list is empty.</p>
-                    </div>
-                </div>
-                <!-- === END ADDED SECTION === -->
 
-                <!-- Color Pickers -->
-                <div class="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4"> <!-- FIX: Corrected 'class.' to 'class=' -->
-                    <div>
-                        <label for="bgColorPicker" class="block text-sm font-medium text-gray-700 mb-1">
-                            Label Background Color
-                        </label>
-                        <input type="color" id="bgColorPicker" value="#FFFFFF" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer">
-                    </div>
-                    <div>
-                        <label for="textColorPicker" class="block text-sm font-medium text-gray-700 mb-1">
-                            Label Text Color
-                        </label>
-                        <input type="color" id="textColorPicker" value="#000000" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer">
-                    </div>
-                </div>
-
-                <!-- ADDED: Institution Name -->
+                <!-- Institution Name -->
                 <div class="pt-4">
                     <label for="institutionName" class="block text-sm font-medium text-gray-700 mb-1">
                         Institution Name (Optional)
                     </label>
-                    <input type="text" id="institutionName"
-                           placeholder="e.g., Dept. of Botany, Victoria College"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                    <input type="text" id="institutionName" placeholder="e.g., Dept. of Botany, Victoria College"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                </div>
+
+                <!-- Color Pickers -->
+                <div class="pt-4 grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="bgColor" class="block text-sm font-medium text-gray-700 mb-1">
+                            Background Color
+                        </label>
+                        <input type="color" id="bgColor" value="#FFFFFF"
+                            class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="textColor" class="block text-sm font-medium text-gray-700 mb-1">
+                            Text & Border Color
+                        </label>
+                        <input type="color" id="textColor" value="#000000"
+                            class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer">
+                    </div>
                 </div>
 
                 <!-- Generate Button -->
                 <div class="pt-4">
-                    <button id="generateLabelsBtn"
-                            class="w-full bg-green-600 text-white text-lg font-bold py-4 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 shadow-lg">
-                        2. Generate All QR Labels
+                    <button id="generateBtn"
+                        class="w-full bg-green-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                        Generate Labels
                     </button>
                 </div>
 
-                <!-- Print Controls -->
-                <div class="pt-4 border-t border-gray-200 mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                    <div>
-                        <label for="printLayoutSelect" class="block text-sm font-medium text-gray-700 mb-1">
-                            3. Select Print Layout
-                        </label>
-                        <select id="printLayoutSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                            <option value="a4-landscape-2up">A4 Landscape - 2 Large Labels (2x1)</option>
-                            <option value="a4-portrait-10up">A4 Portrait - 10 Small Labels (2x5)</option>
-                            <option value="a3-portrait-4up">A3 Portrait - 4 Large Labels (2x2)</option>
-                            <option value="a3-portrait-20up">A3 Portrait - 20 Small Labels (2x10)</option>
-                        </select>
-                    </div>
-                    <button id="printBtn"
+                <!-- Print Section -->
+                <div id="print-controls" class="pt-6 border-t border-gray-200 hidden">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Print Options</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="printLayout" class="block text-sm font-medium text-gray-700 mb-1">
+                                Select Print Layout
+                            </label>
+                            <select id="printLayout"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 bg-white">
+                                <option value="a4_2_up">A4 Landscape - 2 Labels per Page</option>
+                                <option value="a4_10_up">A4 Portrait - 10 Labels (2 Col x 5)</option>
+                                <option value="a3_4_up">A3 Portrait - 4 Labels per Page</option>
+                                <option value="a3_20_up">A3 Portrait - 20 Labels (2 Col x 5)</option>
+                            </select>
+                        </div>
+                        <button id="printBtn"
                             class="w-full bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 shadow-sm">
-                        Print Labels
-                    </button>
+                            Print Labels
+                        </button>
+                    </div>
                 </div>
 
             </div>
         </div>
-        
-        <!-- === LABEL OUTPUT AREA === -->
-        <div class="mt-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4 no-print">Generated Labels</h2>
-            <div id="label-output" class="w-full">
-                <!-- Generated labels will appear here -->
-                <p id="empty-output-msg" class="text-gray-500 no-print">Labels will appear here after you click "Generate".</p>
+
+        <!-- ===== Right Column: Label Output ===== -->
+        <div class="lg:col-span-2">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Generated Labels</h2>
+            <div id="label-output-placeholder" class="text-center py-16 bg-white rounded-xl shadow-lg">
+                <p class="text-lg text-gray-500">Your generated labels will appear here.</p>
+            </div>
+            <div id="label-output" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Labels will be injected here by JS -->
             </div>
         </div>
 
     </div>
-    
-    <!-- === ADD PLANT MODAL === -->
-    <div id="addPlantModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden no-print" aria-hidden="true">
-        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-lg transform scale-95 opacity-0">
-            <!-- Modal Header -->
-            <div class="flex justify-between items-center p-5 border-b border-gray-200">
-                <h3 class="text-xl font-semibold text-gray-800">Search for a Plant</h3>
-                <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+
+    <!-- ===== Modal for Adding Plants ===== -->
+    <div id="plantModal"
+        class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-semibold text-gray-800">Add Plant</h3>
+                <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600 transition duration-150">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
                 </button>
             </div>
-            
-            <!-- Modal Body -->
-            <div class="p-5">
-                <label for="searchInput" class="block text-sm font-medium text-gray-700 mb-1">
-                    Type at least 3 letters of the binomial name
+            <div>
+                <label for="plantSearch" class="block text-sm font-medium text-gray-700 mb-1">
+                    Search for a plant (type 3+ letters)
                 </label>
-                <input type="text" id="searchInput"
-                       placeholder="e.g., Man, Ind, Ficus..."
-                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-            </div>
-            
-            <!-- Search Results -->
-            <div id="searchResults" class="max-h-60 overflow-y-auto border-t border-gray-200">
-                <!-- Search results will be dynamically added here -->
-                <p class="text-gray-400 p-4 text-center">Type to see results.</p>
+                <input type="text" id="plantSearch" placeholder="e.g., Mangifera indica"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <div id="searchResults" class="mt-2 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                    <!-- Search results will be injected here by JS -->
+                </div>
             </div>
         </div>
     </div>
 
+    <!--
+      LOAD LIBRARIES HERE
+      Using jsdelivr as it seems more reliable in this environment
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+
     <script>
-        // === IMPORTANT CONFIGURATION ===
-        // -------------------------------
-        // 1. Publish your Google Sheet to the web as a CSV.
-        // 2. Paste the public CSV URL here.
-        // -------------------------------
-        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuxbNh5Y8UYVwMR752Z5rqNcPAvdzrUvfuAr_ifFcXt2UjQZ5K4xzt0jhHUd3hGFNbUtPpqSmXDxym/pub?gid=497369614&single=true&output=csv'; // <<< UPDATED URL
+        // --- CONFIGURATION ---
+        // URL for the Google Sheet CSV
+        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuxbNh5Y8UYVwMR752Z5rqNcPAvdzrUvfuAr_ifFcXt2UjQZ5K4xzt0jhHUd3hGFNbUtPpqSmXDxym/pub?gid=497369614&single=true&output=csv';
 
-        // --- Global State ---
-        let allPlantsData = [];
-        let selectedPlants = [];
+        // --- GLOBAL VARIABLES ---
+        let plantData = []; // To store all plant data from CSV
+        let selectedPlants = []; // To store plants chosen by the user
 
-        // --- DOM Elements ---
-        const loadingState = document.getElementById('loading-state');
-        const errorState = document.getElementById('error-state');
-        const controls = document.getElementById('controls');
-        
+        // --- DOM ELEMENTS ---
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const errorMessageEl = document.getElementById('error-message');
+        const controlsEl = document.getElementById('controls');
         const addPlantBtn = document.getElementById('addPlantBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const generateLabelsBtn = document.getElementById('generateLabelsBtn');
-        
+        const plantModal = document.getElementById('plantModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const plantSearch = document.getElementById('plantSearch');
+        const searchResults = document.getElementById('searchResults');
         const selectedPlantsList = document.getElementById('selected-plants-list');
         const emptyListMsg = document.getElementById('empty-list-msg');
-        
+        const plantCountEl = document.getElementById('plant-count');
+        const resetListBtn = document.getElementById('resetListBtn');
+        const generateBtn = document.getElementById('generateBtn');
         const labelOutput = document.getElementById('label-output');
-        const emptyOutputMsg = document.getElementById('empty-output-msg');
-        
-        const modal = document.getElementById('addPlantModal');
-        const modalContent = document.getElementById('modal-content');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const searchInput = document.getElementById('searchInput');
-        const searchResults = document.getElementById('searchResults');
-        
-        const printLayoutSelect = document.getElementById('printLayoutSelect');
+        const labelOutputPlaceholder = document.getElementById('label-output-placeholder');
+        const bgColorPicker = document.getElementById('bgColor');
+        const textColorPicker = document.getElementById('textColor');
+        const printControls = document.getElementById('print-controls');
         const printBtn = document.getElementById('printBtn');
-        const printStyleTag = document.getElementById('print-layout-style');
-        
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', initializeApp);
+        const printLayoutSelect = document.getElementById('printLayout');
+        const printStyles = document.getElementById('print-styles');
 
+        // --- INITIALIZATION ---
+        // Start polling immediately to check for libraries.
+        checkLibrariesAndInit();
+
+        /**
+         * Check if libraries are loaded, then initialize.
+         * This polls every 100ms until libraries are ready.
+         */
+        function checkLibrariesAndInit() {
+            if (typeof Papa !== 'undefined' && typeof QRCode !== 'undefined') {
+                // Libraries are loaded, proceed with initialization
+                console.log('Libraries loaded, initializing app...');
+                initializeApp();
+            } else {
+                // Libraries not loaded yet, retry in 100ms
+                console.log('Libraries not loaded, retrying...');
+                setTimeout(checkLibrariesAndInit, 100);
+            }
+        }
+
+        /**
+         * Main function to fetch data and set up the app.
+         * Reverted to PapaParse's built-in downloader.
+         */
         function initializeApp() {
+            // Load selected plants from local storage
             loadSelectedPlants();
-            renderSelectedPlants(); // This was causing the error, but now the elements exist
-            fetchPlantData();
-            attachEventListeners();
-        }
 
-        function attachEventListeners() {
-            // Modal controls
-            addPlantBtn.addEventListener('click', openModal);
-            closeModalBtn.addEventListener('click', closeModal);
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) closeModal(); // Close on overlay click
-            });
-            
-            // Search
-            searchInput.addEventListener('input', handleSearchInput);
-            
-            // Main app controls
-            resetBtn.addEventListener('click', resetList);
-            generateLabelsBtn.addEventListener('click', generateLabels);
-            printBtn.addEventListener('click', handlePrint);
-            
-            // Dynamic listener for removing selected plants
-            selectedPlantsList.addEventListener('click', (e) => {
-                if (e.target.closest('.remove-plant-btn')) {
-                    const binomialName = e.target.closest('.remove-plant-btn').dataset.name;
-                    removePlantFromSelection(binomialName);
-                }
-            });
-            
-            // Dynamic listener for adding from search results
-            searchResults.addEventListener('click', (e) => {
-                if (e.target.closest('.search-item')) {
-                    const binomialName = e.target.closest('.search-item').dataset.name;
-                    addPlantToSelection(binomialName);
-                }
-            });
-        }
-        
-        // --- Data Fetching ---
-        function fetchPlantData() {
-            // Check for placeholder URL
-            if (GOOGLE_SHEET_URL.includes('YOUR_SHEET_ID')) {
-                showError('Please replace the placeholder `GOOGLE_SHEET_URL` in the script with your Google Sheet URL.');
-                return;
-            }
-            
-            Papa.parse(GOOGLE_SHEET_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    // Check for required columns
-                    const requiredCols = ['Binomial', 'Common Name', 'Vernacular', 'ShortURL', 'Family'];
-                    const hasAllCols = requiredCols.every(col => results.meta.fields.includes(col));
-                    
-                    if (!hasAllCols) {
-                        showError(`CSV must have columns: ${requiredCols.join(', ')}.`);
-                        return;
+            try {
+                // Use PapaParse's built-in downloader by setting `download: true`
+                // This is often more reliable for Google Sheets than manual fetch.
+                Papa.parse(GOOGLE_SHEET_URL, {
+                    download: true, // Key change: tells PapaParse to download the file
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        if (results.data) {
+                            plantData = results.data;
+                            loadingEl.classList.add('hidden');
+                            controlsEl.classList.remove('hidden');
+                            setupEventListeners();
+                        } else {
+                            // Handle case where download is successful but data is empty
+                            throw new Error('No data found in CSV.');
+                        }
+                    },
+                    error: (err) => {
+                        // This will catch download errors (like network, CORS) or parsing errors
+                        console.error('PapaParse error:', err);
+                        let errorMsg = err.message || 'An unknown error occurred.';
+                        if (err.message && err.message.includes('No URL')) {
+                             errorMsg = 'Could not download file. Check network or CORS policy.';
+                        }
+                        showError(`Download/Parse Error: ${errorMsg}`);
                     }
+                });
 
-                    // Sort data by BinomialName
-                    allPlantsData = results.data.sort((a, b) => 
-                        a.Binomial.localeCompare(b.Binomial)
-                    );
-                    showControls();
-                },
-                error: (err) => {
-                    showError(err.message);
+            } catch (err) {
+                // This catches any synchronous errors, though most will be in the callbacks.
+                console.error('Failed to initiate PapaParse:', err);
+                showError(`Failed to load data. Error: ${err.message}`);
+            }
+        }
+
+        /**
+         * Helper function to show a persistent error message
+         */
+        function showError(message) {
+            loadingEl.classList.add('hidden');
+            errorMessageEl.textContent = message;
+            errorEl.classList.remove('hidden');
+        }
+
+
+        /**
+         * Set up all event listeners for the application
+         */
+        function setupEventListeners() {
+            // Modal controls
+            addPlantBtn.addEventListener('click', () => plantModal.classList.remove('hidden'));
+            closeModalBtn.addEventListener('click', () => plantModal.classList.add('hidden'));
+            plantModal.addEventListener('click', (e) => {
+                if (e.target === plantModal) {
+                    plantModal.classList.add('hidden');
                 }
             });
-        }
-        
-        // --- UI State Functions ---
-        function showControls() {
-            loadingState.classList.add('hidden');
-            errorState.classList.add('hidden');
-            controls.classList.remove('hidden');
-        }
-        
-        function showError(message) {
-            loadingState.classList.add('hidden');
-            errorState.classList.remove('hidden');
-            errorState.querySelector('p.text-sm').textContent = message;
-        }
-        
-        // --- Modal & Search Logic ---
-        function openModal() {
-            modal.classList.remove('hidden');
-            modal.setAttribute('aria-hidden', 'false');
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-                modalContent.classList.add('scale-100', 'opacity-100');
-                searchInput.focus();
-            }, 10);
+
+            // Search functionality
+            plantSearch.addEventListener('input', handleSearch);
+
+            // List management
+            resetListBtn.addEventListener('click', resetSelectedPlants);
+
+            // Label generation
+            generateBtn.addEventListener('click', generateLabels);
+
+            // Print functionality
+            printBtn.addEventListener('click', handlePrint);
         }
 
-        function closeModal() {
-            modalContent.classList.add('scale-95', 'opacity-0');
-            modalContent.classList.remove('scale-100', 'opacity-100');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                modal.setAttribute('aria-hidden', 'true');
-                searchInput.value = '';
-                searchResults.innerHTML = '<p class="text-gray-400 p-4 text-center">Type to see results.</p>';
-            }, 200);
-        }
-        
-        function handleSearchInput() {
-            const query = searchInput.value.trim().toLowerCase();
-            
+        /**
+         * Handle plant search input
+         */
+        function handleSearch() {
+            const query = plantSearch.value.toLowerCase().trim();
+            searchResults.innerHTML = ''; // Clear previous results
+
             if (query.length < 3) {
-                searchResults.innerHTML = '<p class="text-gray-400 p-4 text-center">Keep typing (3+ letters)...</p>';
+                searchResults.innerHTML = '<p class="text-gray-500 p-4 text-sm">Please type 3 or more letters to search.</p>';
                 return;
             }
-            
-            const filtered = allPlantsData.filter(plant => 
-                plant.Binomial && plant.Binomial.toLowerCase().includes(query)
-            );
-            
-            renderSearchResults(filtered, query);
-        }
-        
-        function renderSearchResults(results, query) {
+
+            const results = plantData.filter(plant => {
+                // Added checks to ensure plant properties exist before calling .toLowerCase()
+                const binomialMatch = plant.Binomial && plant.Binomial.toLowerCase().includes(query);
+                const commonNameMatch = plant['Common Name'] && plant['Common Name'].toLowerCase().includes(query);
+                const vernacularMatch = plant.Vernacular && plant.Vernacular.toLowerCase().includes(query);
+                return binomialMatch || commonNameMatch || vernacularMatch;
+            }).sort((a, b) => a.Binomial.localeCompare(b.Binomial)); // Sort results alphabetically
+
             if (results.length === 0) {
-                searchResults.innerHTML = '<p class="text-gray-500 p-4 text-center">No matching plants found.</p>';
+                searchResults.innerHTML = '<p class="text-gray-500 p-4 text-sm">No plants found.</p>';
                 return;
             }
-            
-            // Function to highlight the match
-            const highlight = (text, highlight) => {
-                const regex = new RegExp(`(${highlight})`, 'gi');
-                return text.replace(regex, '<strong class="font-bold text-blue-600">$1</strong>');
-            };
-            
-            searchResults.innerHTML = results.map(plant => `
-                <div class="search-item p-4 border-b border-gray-100 cursor-pointer" data-name="${plant.Binomial}">
-                    <p class="font-medium text-gray-800">${highlight(plant.Binomial, query)}</p>
-                    <p class="text-sm text-gray-600">${plant['Common Name']}</p>
-                </div>
-            `).join('');
+
+            results.forEach(plant => {
+                const div = document.createElement('div');
+                div.className = 'p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100'; // Corrected class
+                div.innerHTML = `
+                    <p class="font-medium text-gray-800">${plant.Binomial || 'N/A'}</p>
+                    <p class="text-sm text-gray-600">${plant['Common Name'] || 'N/A'}</p>
+                `;
+                div.onclick = () => selectPlant(plant);
+                searchResults.appendChild(div);
+            });
         }
 
-        // --- Selected Plants Logic ---
-        function addPlantToSelection(binomialName) {
-            const plant = allPlantsData.find(p => p.Binomial === binomialName);
-            
-            if (!plant) return;
-            
-            // Check if already selected
-            const isAlreadySelected = selectedPlants.some(p => p.Binomial === binomialName);
-            
-            if (!isAlreadySelected) {
-                selectedPlants.push(plant);
-                saveSelectedPlants();
-                renderSelectedPlants();
+        /**
+         * Add a plant to the selected list
+         */
+        function selectPlant(plant) {
+            if (!plant) {
+                console.error('Invalid plant object:', plant);
+                return;
             }
             
-            closeModal();
+            // Avoid duplicates, handling null/undefined binomials
+            const newBinomial = plant.Binomial || null; // Standardize to null
+            if (selectedPlants.find(p => (p.Binomial || null) === newBinomial)) {
+                console.warn(`${newBinomial || 'Selected plant'} is already in the list.`);
+                plantModal.classList.add('hidden');
+                plantSearch.value = '';
+                searchResults.innerHTML = '';
+                return;
+            }
+
+            selectedPlants.push(plant);
+            saveSelectedPlants();
+            renderSelectedPlants();
+            plantModal.classList.add('hidden');
+            plantSearch.value = '';
+            searchResults.innerHTML = '';
         }
-        
-        function removePlantFromSelection(binomialName) {
-            selectedPlants = selectedPlants.filter(p => p.Binomial !== binomialName);
+
+        /**
+         * Remove a plant from the selected list
+         */
+        function removePlant(binomialName) {
+            // *** FIX #3: Correctly handle 'null' string from dataset ***
+            if (binomialName === "null") {
+                // If binomialName is the string "null", filter for actual null values
+                selectedPlants = selectedPlants.filter(p => p.Binomial !== null);
+            } else {
+                // Otherwise, filter by the string name
+                selectedPlants = selectedPlants.filter(p => p.Binomial !== binomialName);
+            }
             saveSelectedPlants();
             renderSelectedPlants();
         }
-        
+
+        /**
+         * Render the list of selected plants in the UI
+         */
         function renderSelectedPlants() {
-            // FIX: Update count
-            document.getElementById('selected-count').textContent = selectedPlants.length;
+            selectedPlantsList.innerHTML = ''; // Clear list
 
             if (selectedPlants.length === 0) {
                 emptyListMsg.classList.remove('hidden');
-                selectedPlantsList.innerHTML = ''; // Clear list
-                selectedPlantsList.appendChild(emptyListMsg); // Add back the empty message
-                return;
+            } else {
+                emptyListMsg.classList.add('hidden');
+                selectedPlants.forEach(plant => {
+                    // Safety check for null/undefined plant objects in the array
+                    if (!plant) return; 
+
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center justify-between bg-white p-2 border border-gray-200 rounded-md shadow-sm';
+                    
+                    // Pass 'null' as a string to the dataset if binomial is null
+                    const dataBinomial = plant.Binomial === null ? 'null' : plant.Binomial;
+
+                    li.innerHTML = `
+                        <span class="text-sm font-medium text-gray-700">${plant.Binomial || 'N/A'}</span>
+                        <button class="remove-plant-btn text-red-500 hover:text-red-700 transition duration-150" data-binomial="${dataBinomial}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    `;
+                    selectedPlantsList.appendChild(li);
+                });
             }
-            
-            emptyListMsg.classList.add('hidden');
-            selectedPlantsList.innerHTML = selectedPlants.map(plant => `
-                <div class="flex justify-between items-center bg-white p-3 rounded-md shadow-sm border border-gray-200">
-                    <div>
-                        <p class="font-semibold text-gray-800">${plant.Binomial}</p>
-                        <p class="text-sm text-gray-600">${plant['Common Name']}</p>
-                    </div>
-                    <button class="remove-plant-btn text-red-500 hover:text-red-700 p-1" data-name="${plant.Binomial}" title="Remove">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                    </button>
-                </div>
-            `).join('');
+
+            // Update plant count
+            plantCountEl.textContent = selectedPlants.length;
+
+            // Add event listeners to new remove buttons
+            document.querySelectorAll('.remove-plant-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Use currentTarget to ensure we get the button, even if SVG is clicked
+                    removePlant(e.currentTarget.dataset.binomial);
+                });
+            });
         }
-        
-        function resetList() {
+
+        /**
+         * Clear the selected plants list
+         */
+        function resetSelectedPlants() {
+            // Replaced confirm() with a console log and direct action, as confirm() is disallowed.
+            // In a real app, you'd build a custom modal here.
+            console.log('Resetting list...');
             selectedPlants = [];
             saveSelectedPlants();
             renderSelectedPlants();
-            labelOutput.innerHTML = '';
-            emptyOutputMsg.classList.remove('hidden');
-            // FIX: We must append the emptyOutputMsg, not just unhide it, as it might have been cleared.
-            if (!labelOutput.contains(emptyOutputMsg)) {
-                labelOutput.appendChild(emptyOutputMsg);
+        }
+
+        /**
+         * Save the current list of selected plants to localStorage
+         */
+        function saveSelectedPlants() {
+            localStorage.setItem('selectedPlants', JSON.stringify(selectedPlants));
+        }
+
+        /**
+         * Load selected plants from localStorage
+         */
+        function loadSelectedPlants() {
+            const storedPlants = localStorage.getItem('selectedPlants');
+            if (storedPlants) {
+                // *** FIX #2: Safely parse and filter localStorage data ***
+                try {
+                    const parsed = JSON.parse(storedPlants);
+                    if (Array.isArray(parsed)) {
+                        // Filter out any null, undefined, or non-object entries
+                        selectedPlants = parsed.filter(p => p && typeof p === 'object');
+                    } else {
+                        selectedPlants = []; // Malformed data, reset
+                    }
+                } catch (e) {
+                    console.error('Failed to parse localStorage, resetting.', e);
+                    selectedPlants = []; // Corrupt JSON, reset
+                }
+                saveSelectedPlants(); // Re-save the cleaned array
+                renderSelectedPlants();
             }
         }
 
-        // --- Local Storage ---
-        function saveSelectedPlants() {
-            localStorage.setItem('plantLabelSelections', JSON.stringify(selectedPlants));
-        }
-        
-        function loadSelectedPlants() {
-            const saved = localStorage.getItem('plantLabelSelections');
-            if (saved) {
-                selectedPlants = JSON.parse(saved);
+        /**
+         * Format Binomial Name (Italicize first two words)
+         */
+        function formatBinomialName(binomial) {
+            if (!binomial || typeof binomial !== 'string') {
+                return 'N/A'; // Return a safe value
             }
+            const parts = binomial.split(' ');
+            if (parts.length >= 2) {
+                return `<span class="italic">${parts[0]} ${parts[1]}</span> ${parts.slice(2).join(' ')}`;
+            }
+            return binomial; // Return as-is if less than 2 words
         }
-        
-        // --- Label Generation ---
+
+        /**
+         * Generate the QR labels for all selected plants
+         */
         function generateLabels() {
-            labelOutput.innerHTML = '';
-            
+            labelOutput.innerHTML = ''; // Clear previous labels
+
             if (selectedPlants.length === 0) {
-                emptyOutputMsg.classList.remove('hidden');
-                labelOutput.appendChild(emptyOutputMsg);
+                labelOutputPlaceholder.classList.remove('hidden');
+                printControls.classList.add('hidden');
                 return;
             }
-            
-            emptyOutputMsg.classList.add('hidden');
-            
-            // Get selected colors
-            const bgColor = document.getElementById('bgColorPicker').value;
-            const textColor = document.getElementById('textColorPicker').value;
-            
+
+            labelOutputPlaceholder.classList.add('hidden');
+            printControls.classList.remove('hidden');
+
+            const bgColor = bgColorPicker.value;
+            const textColor = textColorPicker.value;
+            const institutionName = document.getElementById('institutionName').value.trim();
+
+            // Set CSS variables for print styles
+            document.documentElement.style.setProperty('--label-bg-color', bgColor);
+            document.documentElement.style.setProperty('--label-text-color', textColor);
+
             selectedPlants.forEach((plant, index) => {
-                // Create the label card
+                // *** FIX #1: Add a guard clause to skip null/invalid plant objects ***
+                if (!plant) {
+                    console.error('Skipping invalid plant data in generateLabels:', plant);
+                    return; // This skips the current iteration and continues the loop
+                }
+
+                const qrId = `qr-${index}`;
+
+                // --- 1. Create Label Card ---
                 const labelCard = document.createElement('div');
                 labelCard.className = 'label-card';
-                // Apply custom colors
                 labelCard.style.backgroundColor = bgColor;
                 labelCard.style.color = textColor;
                 labelCard.style.borderColor = textColor;
-                
-                // --- 1. Institution Name (Optional) ---
-                const institutionName = document.getElementById('institutionName').value.trim();
+
+                // --- 2. Institution Name (Optional) ---
                 if (institutionName) {
                     const institutionP = document.createElement('p');
                     institutionP.className = 'institution-name text-center font-bold text-lg'; // Using a class for print styling
                     institutionP.textContent = institutionName;
                     labelCard.appendChild(institutionP);
                 }
-                
-                // --- 2. Content Wrapper (Text + QR) ---
+
+                // --- 3. Content Wrapper (Text + QR) ---
                 const contentWrapper = document.createElement('div');
                 contentWrapper.className = 'label-content-wrapper';
 
                 // --- Text Content ---
                 const textDiv = document.createElement('div');
                 textDiv.className = 'label-text';
-                
-                // 1. Binomial Name
-                const binomialBox = document.createElement('div');
-                binomialBox.className = 'binomial-box';
-                binomialBox.innerHTML = formatBinomialName(plant.Binomial);
-                // Apply custom border color
-                binomialBox.style.borderColor = textColor;
-                textDiv.appendChild(binomialBox);
-                
-                // 2. Family Name (added)
+
+                // Binomial Name
+                const binomialName = document.createElement('div');
+                binomialName.className = 'binomial-box';
+                binomialName.style.borderColor = textColor; // Use text color for inner border
+                binomialName.innerHTML = formatBinomialName(plant.Binomial); // This is now safe
+                textDiv.appendChild(binomialName);
+
+                // Family
                 const familyName = document.createElement('p');
-                familyName.className = 'text-sm font-medium text-center -mt-1 mb-2'; // Removed text-gray-600
-                familyName.textContent = `(Family: ${plant.Family || 'Unknown'})`;
+                familyName.className = 'family-name text-center font-medium';
+                familyName.textContent = plant.Family || ' ';
                 textDiv.appendChild(familyName);
-                
-                // 3. Common Name
+
+                // Common Name
                 const commonName = document.createElement('p');
-                commonName.className = 'text-base font-medium text-center'; // Removed text-gray-700, added text-center
-                commonName.textContent = plant['Common Name'] || ' '; // Add space to maintain height if empty
+                commonName.className = 'common-name text-lg font-semibold';
+                commonName.textContent = plant['Common Name'] || ' ';
                 textDiv.appendChild(commonName);
-                
-                // 3. Vernacular Name
+
+                // Vernacular Name
                 const vernacularName = document.createElement('p');
-                vernacularName.className = 'text-base text-center'; // Removed text-gray-600, added text-center
+                vernacularName.className = 'vernacular-name text-md';
                 vernacularName.textContent = plant.Vernacular || ' ';
                 textDiv.appendChild(vernacularName);
-                
+
                 contentWrapper.appendChild(textDiv); // Append textDiv to wrapper
 
                 // --- QR Code ---
                 const qrDiv = document.createElement('div');
-                const qrId = `qr-code-${index}`;
                 qrDiv.id = qrId;
                 qrDiv.className = 'label-qr-code';
                 contentWrapper.appendChild(qrDiv); // Append qrDiv to wrapper
-                
+
                 labelCard.appendChild(contentWrapper); // Append wrapper to card
 
-                // --- 3. Footer ---
+                // --- 4. Footer Box ---
+                const footerBox = document.createElement('div');
+                footerBox.className = 'footer-box';
+                footerBox.style.borderColor = textColor; // Use text color for border
+
                 const footerP = document.createElement('p');
-                footerP.className = 'footer-note text-xs text-center mt-2 opacity-75'; // Using a class for print styling
+                footerP.className = 'footer-note';
                 footerP.textContent = 'Generated by The QRit service by the Department of Botany, Government Victoria College, Palakkad.';
-                labelCard.appendChild(footerP);
+
+                footerBox.appendChild(footerP);
+                labelCard.appendChild(footerBox);
 
                 // Append the card to the output *before* generating the QR code
                 labelOutput.appendChild(labelCard);
-                
-                // Generate the QR code
+
+                // --- Generate the QR Code ---
                 try {
-                    new QRCode(document.getElementById(qrId), {
-                        text: plant.ShortURL,
+                    new QRCode(qrId, {
+                        text: plant.ShortURL || 'N/A',
                         width: 100,
                         height: 100,
-                        colorDark: textColor, // Use custom text color
-                        colorLight: bgColor, // Use custom background color
-                        correctLevel: QRCode.CorrectLevel.M
+                        colorDark: textColor,
+                        colorLight: bgColor,
+                        correctLevel: QRCode.CorrectLevel.H
                     });
                 } catch (error) {
-                    console.error("QR Code generation failed for:", plant.Binomial, error);
-                    document.getElementById(qrId).innerHTML = '<p class="text-red-500 text-xs">QR Error</p>';
+                    console.error('Failed to generate QR code for', plant.Binomial, error);
+                    document.getElementById(qrId).innerHTML = '<p class="text-xs text-red-500">QR Error</p>';
                 }
             });
         }
-        
-        function formatBinomialName(name) {
-            if (!name) return '';
-            const parts = name.split(' ');
-            const genus = parts[0] || '';
-            const species = parts[1] || '';
-            const rest = parts.slice(2).join(' '); // For subspecies, varieties, etc.
-            
-            // Return with genus and species italicized
-            return `<i class="italic">${genus}</i> <i class="italic">${species}</i> ${rest}`;
+
+        /**
+         * Handle Print Button Click
+         */
+        function handlePrint() {
+            const layout = printLayoutSelect.value;
+            updatePrintStyles(layout);
+
+            // Give styles a moment to apply before triggering print
+            setTimeout(() => {
+                window.print();
+            }, 100);
         }
-        
-        // --- Print Logic ---
-            
-        const PRINT_CSS = {
+
+        /**
+         * Dynamically update the CSS for printing
+         */
+        function updatePrintStyles(layout) {
             // Base styles for all print layouts
-            base: `
-                body { background-color: white !important; margin: 0; padding: 0; }
-                .no-print { display: none !important; }
+            const baseStyles = `
+                @page {
+                    size: A4; /* Default */
+                    margin: 0;
+                }
+                body {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
                 #label-output {
                     margin: 10mm;
                     display: grid;
@@ -649,11 +774,15 @@
                     font-size: 1.1rem;
                     margin-bottom: 2mm;
                 }
+                .footer-box {
+                    border-top: 1px solid var(--label-text-color, black) !important;
+                    padding-top: 2mm;
+                    margin-top: 2mm;
+                }
                 .footer-note {
                     text-align: center;
                     font-size: 0.4rem; /* Made smaller */
                     white-space: nowrap; /* Force to one line */
-                    margin-top: 2mm;
                     opacity: 0.75;
                 }
                 .binomial-box {
@@ -661,12 +790,13 @@
                     overflow-wrap: break-word; /* Ensure wrapping in print */
                 }
                 .label-qr-code img {
-                    border-radius: 0;
-                    box-shadow: none;
+                    width: 100px;
+                    height: 100px;
                 }
-            `,
-            // Styles for small labels (10-up, 20-up)
-            smallLabels: `
+            `;
+
+            // Styles for small (10-up, 20-up) labels
+            const smallLabels = `
                 .label-card {
                     padding: 2mm;
                     gap: 2px;
@@ -679,68 +809,73 @@
                     font-size: 0.9rem;
                     margin-bottom: 1mm;
                 }
-                .footer-note {
-                    font-size: 0.4rem; /* Made smaller */
-                    white-space: nowrap; /* Force to one line */
+                .footer-box {
+                    padding-top: 1mm;
                     margin-top: 1mm;
+                }
+                .footer-note {
+                    font-size: 0.4rem; /* Stays small */
+                    white-space: nowrap; 
                 }
                 .label-qr-code { width: 80px; height: 80px; }
                 .label-text { gap: 0.25rem; }
-                .binomial-box { padding: 0.25rem; font-size: 0.9rem; }
-                .label-text p { font-size: 0.8rem; line-height: 1.2; }
-                p.text-sm { font-size: 0.75rem; }
-            `,
-            // Layout-specific rules
-            layouts: {
-                'a4-landscape-2up': `
-                    @page { size: A4 landscape; margin: 10mm; }
-                    #label-output { grid-template-columns: 1fr 1fr; gap: 10mm; }
-                `,
-                'a4-portrait-10up': `
-                    @page { size: A4 portrait; margin: 10mm; }
-                    #label-output { grid-template-columns: 1fr 1fr; gap: 5mm; }
-                `,
-                'a3-portrait-4up': `
-                    @page { size: A3 portrait; margin: 10mm; }
-                    #label-output { grid-template-columns: 1fr 1fr; gap: 10mm; }
-                `,
-                'a3-portrait-20up': `
-                    @page { size: A3 portrait; margin: 10mm; }
-                    #label-output { grid-template-columns: 1fr 1fr; gap: 5mm; }
-                `
-            }
-        };
-
-        function handlePrint() {
-            const layout = printLayoutSelect.value;
-            
-            let css = `
-                @media print {
-                    ${PRINT_CSS.base}
-                    ${PRINT_CSS.layouts[layout]}
+                .binomial-box { font-size: 0.9rem; padding: 2mm; }
+                .family-name { font-size: 0.8rem; }
+                .common-name { font-size: 1rem; }
+                .vernacular-name { font-size: 0.8rem; }
             `;
-            
-            // Add small label styles if needed
-            if (layout === 'a4-portrait-10up' || layout === 'a3-portrait-20up') {
-                css += PRINT_CSS.smallLabels;
+
+            let specificStyles = '';
+
+            switch (layout) {
+                case 'a4_2_up':
+                    specificStyles = `
+                        @page { size: A4 landscape; margin: 10mm; }
+                        #label-output {
+                            grid-template-columns: 1fr 1fr;
+                            gap: 10mm;
+                        }
+                    `;
+                    break;
+                case 'a4_10_up':
+                    specificStyles = `
+                        @page { size: A4 portrait; margin: 10mm; }
+                        #label-output {
+                            grid-template-columns: 1fr 1fr;
+                            grid-template-rows: repeat(5, 1fr);
+                            gap: 5mm;
+                        }
+                        ${smallLabels}
+                    `;
+                    break;
+                case 'a3_4_up':
+                    specificStyles = `
+                        @page { size: A3 portrait; margin: 10mm; }
+                        #label-output {
+                            grid-template-columns: 1fr 1fr;
+                            grid-template-rows: 1fr 1fr;
+                            gap: 10mm;
+                        }
+                    `;
+                    break;
+                case 'a3_20_up':
+                    specificStyles = `
+                        @page { size: A3 portrait; margin: 10mm; }
+                        #label-output {
+                            grid-template-columns: 1fr 1fr;
+                            grid-template-rows: repeat(5, 1fr);
+                            gap: 10mm;
+                        }
+                        ${smallLabels}
+                    `;
+                    break;
             }
 
-            css += `}`; // Close @media print
-            
-            // Set custom colors as CSS variables for the print styles to use
-            const bgColor = document.getElementById('bgColorPicker').value;
-            const textColor = document.getElementById('textColorPicker').value;
-            document.documentElement.style.setProperty('--label-bg-color', bgColor);
-            document.documentElement.style.setProperty('--label-text-color', textColor);
-
-            printStyleTag.innerHTML = css;
-            
-            // Give the browser a moment to apply styles, then print
-            setTimeout(() => {
-                window.print();
-            }, 100);
+            printStyles.innerHTML = baseStyles + specificStyles;
         }
+
     </script>
 
 </body>
+
 </html>
