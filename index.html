@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant QR Label Generator</title>
+    <!-- 1. Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Load qrcode.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- 3. Load PapaParse library for CSV handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    
+    <style>
+        /* Custom styles for the app */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* --- Modal Styles --- */
+        #addPlantModal {
+            transition: opacity 0.2s ease-in-out;
+        }
+        #modal-content {
+            transition: transform 0.2s ease-in-out;
+        }
+        
+        /* --- Search Result Styles --- */
+        #searchResults .search-item:hover {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        
+        /* --- Generated Label Styles --- */
+        #label-output {
+            /* Styles for printing */
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+
+        .label-card {
+            border: 2px solid #1f2937; /* gray-800 */
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            background-color: white;
+            display: flex; /* CHANGED from grid */
+            flex-direction: column; /* ADDED */
+            gap: 0.5rem; /* CHANGED */
+            page-break-inside: avoid; /* Avoids breaking a label during printing */
+            /* align-items: center; <-- REMOVED, not needed for flex-col */
+        }
+
+        .label-content-wrapper { /* ADDED this new wrapper class */
+            display: grid;
+            grid-template-columns: 1fr 100px; /* Text content | QR Code */
+            gap: 0.75rem;
+            align-items: center;
+            width: 100%;
+        }
+
+        .label-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            /* Ensure text wraps */
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            min-width: 0; /* Important for flex/grid text wrapping */
+        }
+
+        .binomial-box {
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            overflow-wrap: break-word; /* ADDED to prevent overflow */
+            word-break: break-word; /* ADDED as a fallback */
+        }
+        
+        .label-qr-code {
+            width: 100px;
+            height: 100px;
+            flex-shrink: 0; /* Prevent QR code from shrinking */
+        }
+        
+        .label-qr-code img {
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0.25rem;
+        }
+        
+        /* --- Print Styles --- */
+        /* REMOVED @media print block from here */
+        
+    </style>
+    <style id="print-layout-style">
+        /* This will be filled by JavaScript for printing */
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        
+        <!-- === MAIN CONTROL PANEL === -->
+        <div class="bg-white p-6 rounded-xl shadow-lg w-full no-print">
+            <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
+                Plant QR Label Generator
+            </h1>
+            
+            <!-- Instructions -->
+            <div id="loading-state" class="text-center p-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg">
+                <p>Loading plant database from Google Sheet...</p>
+            </div>
+            
+            <div id="error-state" class="hidden text-center p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                <p class="font-bold">Error Loading Database</p>
+                <p class="text-sm">Could not fetch data. Please check the `GOOGLE_SHEET_URL` in the script and ensure your sheet is "Published to the web" as a CSV.</p>
+            </div>
+
+            <!-- Controls -->
+            <div id="controls" class="hidden space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button id="addPlantBtn"
+                            class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                        1. Add Plant to List
+                    </button>
+                    <button id="resetBtn"
+                            class="w-full bg-red-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                        Reset List
+                    </button>
+                </div>
+                
+                <!-- === ADDED: SELECTED PLANTS LIST === -->
+                <div class="pt-4">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Selected Plants (<span id="selected-count">0</span>)</h3>
+                    <div id="selected-plants-list" class="max-h-48 overflow-y-auto space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <!-- Selected plants will appear here -->
+                        <p id="empty-list-msg" class="text-gray-500 text-center py-4">Your plant list is empty.</p>
+                    </div>
+                </div>
+                <!-- === END ADDED SECTION === -->
+
+                <!-- Color Pickers -->
+                <div class="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4"> <!-- FIX: Corrected 'class.' to 'class=' -->
+                    <div>
+                        <label for="bgColorPicker" class="block text-sm font-medium text-gray-700 mb-1">
+                            Label Background Color
+                        </label>
+                        <input type="color" id="bgColorPicker" value="#FFFFFF" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="textColorPicker" class="block text-sm font-medium text-gray-700 mb-1">
+                            Label Text Color
+                        </label>
+                        <input type="color" id="textColorPicker" value="#000000" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- ADDED: Institution Name -->
+                <div class="pt-4">
+                    <label for="institutionName" class="block text-sm font-medium text-gray-700 mb-1">
+                        Institution Name (Optional)
+                    </label>
+                    <input type="text" id="institutionName"
+                           placeholder="e.g., Dept. of Botany, Victoria College"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                </div>
+
+                <!-- Generate Button -->
+                <div class="pt-4">
+                    <button id="generateLabelsBtn"
+                            class="w-full bg-green-600 text-white text-lg font-bold py-4 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition duration-200 shadow-lg">
+                        2. Generate All QR Labels
+                    </button>
+                </div>
+
+                <!-- Print Controls -->
+                <div class="pt-4 border-t border-gray-200 mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label for="printLayoutSelect" class="block text-sm font-medium text-gray-700 mb-1">
+                            3. Select Print Layout
+                        </label>
+                        <select id="printLayoutSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                            <option value="a4-landscape-2up">A4 Landscape - 2 Large Labels (2x1)</option>
+                            <option value="a4-portrait-10up">A4 Portrait - 10 Small Labels (2x5)</option>
+                            <option value="a3-portrait-4up">A3 Portrait - 4 Large Labels (2x2)</option>
+                            <option value="a3-portrait-20up">A3 Portrait - 20 Small Labels (2x10)</option>
+                        </select>
+                    </div>
+                    <button id="printBtn"
+                            class="w-full bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 shadow-sm">
+                        Print Labels
+                    </button>
+                </div>
+
+            </div>
+        </div>
+        
+        <!-- === LABEL OUTPUT AREA === -->
+        <div class="mt-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4 no-print">Generated Labels</h2>
+            <div id="label-output" class="w-full">
+                <!-- Generated labels will appear here -->
+                <p id="empty-output-msg" class="text-gray-500 no-print">Labels will appear here after you click "Generate".</p>
+            </div>
+        </div>
+
+    </div>
+    
+    <!-- === ADD PLANT MODAL === -->
+    <div id="addPlantModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden no-print" aria-hidden="true">
+        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-lg transform scale-95 opacity-0">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-800">Search for a Plant</h3>
+                <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="p-5">
+                <label for="searchInput" class="block text-sm font-medium text-gray-700 mb-1">
+                    Type at least 3 letters of the binomial name
+                </label>
+                <input type="text" id="searchInput"
+                       placeholder="e.g., Man, Ind, Ficus..."
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+            </div>
+            
+            <!-- Search Results -->
+            <div id="searchResults" class="max-h-60 overflow-y-auto border-t border-gray-200">
+                <!-- Search results will be dynamically added here -->
+                <p class="text-gray-400 p-4 text-center">Type to see results.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === IMPORTANT CONFIGURATION ===
+        // -------------------------------
+        // 1. Publish your Google Sheet to the web as a CSV.
+        // 2. Paste the public CSV URL here.
+        // -------------------------------
+        const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuxbNh5Y8UYVwMR752Z5rqNcPAvdzrUvfuAr_ifFcXt2UjQZ5K4xzt0jhHUd3hGFNbUtPpqSmXDxym/pub?gid=497369614&single=true&output=csv'; // <<< UPDATED URL
+
+        // --- Global State ---
+        let allPlantsData = [];
+        let selectedPlants = [];
+
+        // --- DOM Elements ---
+        const loadingState = document.getElementById('loading-state');
+        const errorState = document.getElementById('error-state');
+        const controls = document.getElementById('controls');
+        
+        const addPlantBtn = document.getElementById('addPlantBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const generateLabelsBtn = document.getElementById('generateLabelsBtn');
+        
+        const selectedPlantsList = document.getElementById('selected-plants-list');
+        const emptyListMsg = document.getElementById('empty-list-msg');
+        
+        const labelOutput = document.getElementById('label-output');
+        const emptyOutputMsg = document.getElementById('empty-output-msg');
+        
+        const modal = document.getElementById('addPlantModal');
+        const modalContent = document.getElementById('modal-content');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        
+        const printLayoutSelect = document.getElementById('printLayoutSelect');
+        const printBtn = document.getElementById('printBtn');
+        const printStyleTag = document.getElementById('print-layout-style');
+        
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        function initializeApp() {
+            loadSelectedPlants();
+            renderSelectedPlants(); // This was causing the error, but now the elements exist
+            fetchPlantData();
+            attachEventListeners();
+        }
+
+        function attachEventListeners() {
+            // Modal controls
+            addPlantBtn.addEventListener('click', openModal);
+            closeModalBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal(); // Close on overlay click
+            });
+            
+            // Search
+            searchInput.addEventListener('input', handleSearchInput);
+            
+            // Main app controls
+            resetBtn.addEventListener('click', resetList);
+            generateLabelsBtn.addEventListener('click', generateLabels);
+            printBtn.addEventListener('click', handlePrint);
+            
+            // Dynamic listener for removing selected plants
+            selectedPlantsList.addEventListener('click', (e) => {
+                if (e.target.closest('.remove-plant-btn')) {
+                    const binomialName = e.target.closest('.remove-plant-btn').dataset.name;
+                    removePlantFromSelection(binomialName);
+                }
+            });
+            
+            // Dynamic listener for adding from search results
+            searchResults.addEventListener('click', (e) => {
+                if (e.target.closest('.search-item')) {
+                    const binomialName = e.target.closest('.search-item').dataset.name;
+                    addPlantToSelection(binomialName);
+                }
+            });
+        }
+        
+        // --- Data Fetching ---
+        function fetchPlantData() {
+            // Check for placeholder URL
+            if (GOOGLE_SHEET_URL.includes('YOUR_SHEET_ID')) {
+                showError('Please replace the placeholder `GOOGLE_SHEET_URL` in the script with your Google Sheet URL.');
+                return;
+            }
+            
+            Papa.parse(GOOGLE_SHEET_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    // Check for required columns
+                    const requiredCols = ['Binomial', 'Common Name', 'Vernacular', 'ShortURL', 'Family'];
+                    const hasAllCols = requiredCols.every(col => results.meta.fields.includes(col));
+                    
+                    if (!hasAllCols) {
+                        showError(`CSV must have columns: ${requiredCols.join(', ')}.`);
+                        return;
+                    }
+
+                    // Sort data by BinomialName
+                    allPlantsData = results.data.sort((a, b) => 
+                        a.Binomial.localeCompare(b.Binomial)
+                    );
+                    showControls();
+                },
+                error: (err) => {
+                    showError(err.message);
+                }
+            });
+        }
+        
+        // --- UI State Functions ---
+        function showControls() {
+            loadingState.classList.add('hidden');
+            errorState.classList.add('hidden');
+            controls.classList.remove('hidden');
+        }
+        
+        function showError(message) {
+            loadingState.classList.add('hidden');
+            errorState.classList.remove('hidden');
+            errorState.querySelector('p.text-sm').textContent = message;
+        }
+        
+        // --- Modal & Search Logic ---
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+                searchInput.focus();
+            }, 10);
+        }
+
+        function closeModal() {
+            modalContent.classList.add('scale-95', 'opacity-0');
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.setAttribute('aria-hidden', 'true');
+                searchInput.value = '';
+                searchResults.innerHTML = '<p class="text-gray-400 p-4 text-center">Type to see results.</p>';
+            }, 200);
+        }
+        
+        function handleSearchInput() {
+            const query = searchInput.value.trim().toLowerCase();
+            
+            if (query.length < 3) {
+                searchResults.innerHTML = '<p class="text-gray-400 p-4 text-center">Keep typing (3+ letters)...</p>';
+                return;
+            }
+            
+            const filtered = allPlantsData.filter(plant => 
+                plant.Binomial && plant.Binomial.toLowerCase().includes(query)
+            );
+            
+            renderSearchResults(filtered, query);
+        }
+        
+        function renderSearchResults(results, query) {
+            if (results.length === 0) {
+                searchResults.innerHTML = '<p class="text-gray-500 p-4 text-center">No matching plants found.</p>';
+                return;
+            }
+            
+            // Function to highlight the match
+            const highlight = (text, highlight) => {
+                const regex = new RegExp(`(${highlight})`, 'gi');
+                return text.replace(regex, '<strong class="font-bold text-blue-600">$1</strong>');
+            };
+            
+            searchResults.innerHTML = results.map(plant => `
+                <div class="search-item p-4 border-b border-gray-100 cursor-pointer" data-name="${plant.Binomial}">
+                    <p class="font-medium text-gray-800">${highlight(plant.Binomial, query)}</p>
+                    <p class="text-sm text-gray-600">${plant['Common Name']}</p>
+                </div>
+            `).join('');
+        }
+
+        // --- Selected Plants Logic ---
+        function addPlantToSelection(binomialName) {
+            const plant = allPlantsData.find(p => p.Binomial === binomialName);
+            
+            if (!plant) return;
+            
+            // Check if already selected
+            const isAlreadySelected = selectedPlants.some(p => p.Binomial === binomialName);
+            
+            if (!isAlreadySelected) {
+                selectedPlants.push(plant);
+                saveSelectedPlants();
+                renderSelectedPlants();
+            }
+            
+            closeModal();
+        }
+        
+        function removePlantFromSelection(binomialName) {
+            selectedPlants = selectedPlants.filter(p => p.Binomial !== binomialName);
+            saveSelectedPlants();
+            renderSelectedPlants();
+        }
+        
+        function renderSelectedPlants() {
+            // FIX: Update count
+            document.getElementById('selected-count').textContent = selectedPlants.length;
+
+            if (selectedPlants.length === 0) {
+                emptyListMsg.classList.remove('hidden');
+                selectedPlantsList.innerHTML = ''; // Clear list
+                selectedPlantsList.appendChild(emptyListMsg); // Add back the empty message
+                return;
+            }
+            
+            emptyListMsg.classList.add('hidden');
+            selectedPlantsList.innerHTML = selectedPlants.map(plant => `
+                <div class="flex justify-between items-center bg-white p-3 rounded-md shadow-sm border border-gray-200">
+                    <div>
+                        <p class="font-semibold text-gray-800">${plant.Binomial}</p>
+                        <p class="text-sm text-gray-600">${plant['Common Name']}</p>
+                    </div>
+                    <button class="remove-plant-btn text-red-500 hover:text-red-700 p-1" data-name="${plant.Binomial}" title="Remove">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function resetList() {
+            selectedPlants = [];
+            saveSelectedPlants();
+            renderSelectedPlants();
+            labelOutput.innerHTML = '';
+            emptyOutputMsg.classList.remove('hidden');
+            // FIX: We must append the emptyOutputMsg, not just unhide it, as it might have been cleared.
+            if (!labelOutput.contains(emptyOutputMsg)) {
+                labelOutput.appendChild(emptyOutputMsg);
+            }
+        }
+
+        // --- Local Storage ---
+        function saveSelectedPlants() {
+            localStorage.setItem('plantLabelSelections', JSON.stringify(selectedPlants));
+        }
+        
+        function loadSelectedPlants() {
+            const saved = localStorage.getItem('plantLabelSelections');
+            if (saved) {
+                selectedPlants = JSON.parse(saved);
+            }
+        }
+        
+        // --- Label Generation ---
+        function generateLabels() {
+            labelOutput.innerHTML = '';
+            
+            if (selectedPlants.length === 0) {
+                emptyOutputMsg.classList.remove('hidden');
+                labelOutput.appendChild(emptyOutputMsg);
+                return;
+            }
+            
+            emptyOutputMsg.classList.add('hidden');
+            
+            // Get selected colors
+            const bgColor = document.getElementById('bgColorPicker').value;
+            const textColor = document.getElementById('textColorPicker').value;
+            
+            selectedPlants.forEach((plant, index) => {
+                // Create the label card
+                const labelCard = document.createElement('div');
+                labelCard.className = 'label-card';
+                // Apply custom colors
+                labelCard.style.backgroundColor = bgColor;
+                labelCard.style.color = textColor;
+                labelCard.style.borderColor = textColor;
+                
+                // --- 1. Institution Name (Optional) ---
+                const institutionName = document.getElementById('institutionName').value.trim();
+                if (institutionName) {
+                    const institutionP = document.createElement('p');
+                    institutionP.className = 'institution-name text-center font-bold text-lg'; // Using a class for print styling
+                    institutionP.textContent = institutionName;
+                    labelCard.appendChild(institutionP);
+                }
+                
+                // --- 2. Content Wrapper (Text + QR) ---
+                const contentWrapper = document.createElement('div');
+                contentWrapper.className = 'label-content-wrapper';
+
+                // --- Text Content ---
+                const textDiv = document.createElement('div');
+                textDiv.className = 'label-text';
+                
+                // 1. Binomial Name
+                const binomialBox = document.createElement('div');
+                binomialBox.className = 'binomial-box';
+                binomialBox.innerHTML = formatBinomialName(plant.Binomial);
+                // Apply custom border color
+                binomialBox.style.borderColor = textColor;
+                textDiv.appendChild(binomialBox);
+                
+                // 2. Family Name (added)
+                const familyName = document.createElement('p');
+                familyName.className = 'text-sm font-medium text-center -mt-1 mb-2'; // Removed text-gray-600
+                familyName.textContent = `(Family: ${plant.Family || 'Unknown'})`;
+                textDiv.appendChild(familyName);
+                
+                // 3. Common Name
+                const commonName = document.createElement('p');
+                commonName.className = 'text-base font-medium text-center'; // Removed text-gray-700, added text-center
+                commonName.textContent = plant['Common Name'] || ' '; // Add space to maintain height if empty
+                textDiv.appendChild(commonName);
+                
+                // 3. Vernacular Name
+                const vernacularName = document.createElement('p');
+                vernacularName.className = 'text-base text-center'; // Removed text-gray-600, added text-center
+                vernacularName.textContent = plant.Vernacular || ' ';
+                textDiv.appendChild(vernacularName);
+                
+                contentWrapper.appendChild(textDiv); // Append textDiv to wrapper
+
+                // --- QR Code ---
+                const qrDiv = document.createElement('div');
+                const qrId = `qr-code-${index}`;
+                qrDiv.id = qrId;
+                qrDiv.className = 'label-qr-code';
+                contentWrapper.appendChild(qrDiv); // Append qrDiv to wrapper
+                
+                labelCard.appendChild(contentWrapper); // Append wrapper to card
+
+                // --- 3. Footer ---
+                const footerP = document.createElement('p');
+                footerP.className = 'footer-note text-xs text-center mt-2 opacity-75'; // Using a class for print styling
+                footerP.textContent = 'Generated by The QRit service by the Department of Botany, Government Victoria College, Palakkad.';
+                labelCard.appendChild(footerP);
+
+                // Append the card to the output *before* generating the QR code
+                labelOutput.appendChild(labelCard);
+                
+                // Generate the QR code
+                try {
+                    new QRCode(document.getElementById(qrId), {
+                        text: plant.ShortURL,
+                        width: 100,
+                        height: 100,
+                        colorDark: textColor, // Use custom text color
+                        colorLight: bgColor, // Use custom background color
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } catch (error) {
+                    console.error("QR Code generation failed for:", plant.Binomial, error);
+                    document.getElementById(qrId).innerHTML = '<p class="text-red-500 text-xs">QR Error</p>';
+                }
+            });
+        }
+        
+        function formatBinomialName(name) {
+            if (!name) return '';
+            const parts = name.split(' ');
+            const genus = parts[0] || '';
+            const species = parts[1] || '';
+            const rest = parts.slice(2).join(' '); // For subspecies, varieties, etc.
+            
+            // Return with genus and species italicized
+            return `<i class="italic">${genus}</i> <i class="italic">${species}</i> ${rest}`;
+        }
+        
+        // --- Print Logic ---
+            
+        const PRINT_CSS = {
+            // Base styles for all print layouts
+            base: `
+                body { background-color: white !important; margin: 0; padding: 0; }
+                .no-print { display: none !important; }
+                #label-output {
+                    margin: 10mm;
+                    display: grid;
+                }
+                .label-card {
+                    border: 1px solid #000;
+                    page-break-inside: avoid;
+                    /* Use custom colors set by user via CSS variables */
+                    background-color: var(--label-bg-color, white) !important;
+                    color: var(--label-text-color, black) !important;
+                    border-color: var(--label-text-color, black) !important;
+                    display: flex; /* Ensure flex for print */
+                    flex-direction: column; /* Ensure flex for print */
+                    gap: 5px; /* Adjust gap for print */
+                    padding: 5mm;
+                }
+                .label-content-wrapper { /* Style the wrapper for print */
+                    display: grid;
+                    grid-template-columns: 1fr 100px;
+                    gap: 5mm;
+                    align-items: center;
+                    width: 100%;
+                }
+                .institution-name {
+                    text-align: center;
+                    font-weight: bold;
+                    font-size: 1.1rem;
+                    margin-bottom: 2mm;
+                }
+                .footer-note {
+                    text-align: center;
+                    font-size: 0.4rem; /* Made smaller */
+                    white-space: nowrap; /* Force to one line */
+                    margin-top: 2mm;
+                    opacity: 0.75;
+                }
+                .binomial-box {
+                    border-color: var(--label-text-color, black) !important;
+                    overflow-wrap: break-word; /* Ensure wrapping in print */
+                }
+                .label-qr-code img {
+                    border-radius: 0;
+                    box-shadow: none;
+                }
+            `,
+            // Styles for small labels (10-up, 20-up)
+            smallLabels: `
+                .label-card {
+                    padding: 2mm;
+                    gap: 2px;
+                }
+                .label-content-wrapper {
+                    grid-template-columns: 1fr 80px; /* Smaller QR */
+                    gap: 2mm;
+                }
+                .institution-name {
+                    font-size: 0.9rem;
+                    margin-bottom: 1mm;
+                }
+                .footer-note {
+                    font-size: 0.4rem; /* Made smaller */
+                    white-space: nowrap; /* Force to one line */
+                    margin-top: 1mm;
+                }
+                .label-qr-code { width: 80px; height: 80px; }
+                .label-text { gap: 0.25rem; }
+                .binomial-box { padding: 0.25rem; font-size: 0.9rem; }
+                .label-text p { font-size: 0.8rem; line-height: 1.2; }
+                p.text-sm { font-size: 0.75rem; }
+            `,
+            // Layout-specific rules
+            layouts: {
+                'a4-landscape-2up': `
+                    @page { size: A4 landscape; margin: 10mm; }
+                    #label-output { grid-template-columns: 1fr 1fr; gap: 10mm; }
+                `,
+                'a4-portrait-10up': `
+                    @page { size: A4 portrait; margin: 10mm; }
+                    #label-output { grid-template-columns: 1fr 1fr; gap: 5mm; }
+                `,
+                'a3-portrait-4up': `
+                    @page { size: A3 portrait; margin: 10mm; }
+                    #label-output { grid-template-columns: 1fr 1fr; gap: 10mm; }
+                `,
+                'a3-portrait-20up': `
+                    @page { size: A3 portrait; margin: 10mm; }
+                    #label-output { grid-template-columns: 1fr 1fr; gap: 5mm; }
+                `
+            }
+        };
+
+        function handlePrint() {
+            const layout = printLayoutSelect.value;
+            
+            let css = `
+                @media print {
+                    ${PRINT_CSS.base}
+                    ${PRINT_CSS.layouts[layout]}
+            `;
+            
+            // Add small label styles if needed
+            if (layout === 'a4-portrait-10up' || layout === 'a3-portrait-20up') {
+                css += PRINT_CSS.smallLabels;
+            }
+
+            css += `}`; // Close @media print
+            
+            // Set custom colors as CSS variables for the print styles to use
+            const bgColor = document.getElementById('bgColorPicker').value;
+            const textColor = document.getElementById('textColorPicker').value;
+            document.documentElement.style.setProperty('--label-bg-color', bgColor);
+            document.documentElement.style.setProperty('--label-text-color', textColor);
+
+            printStyleTag.innerHTML = css;
+            
+            // Give the browser a moment to apply styles, then print
+            setTimeout(() => {
+                window.print();
+            }, 100);
+        }
+    </script>
+
+</body>
+</html>
