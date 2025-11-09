@@ -129,7 +129,13 @@
 
         <!-- ===== Left Column: Control Panel ===== -->
         <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg h-fit sticky top-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-6">Plant Label Generator</h1>
+            <!-- MODIFIED TITLE SECTION -->
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">QRit</h1>
+            <p class="text-sm text-gray-600 mb-6">
+                the plant qr code generation service by the Department of Botany, Government Victoria College, Palakkad.
+            </p>
+            <!-- END MODIFIED TITLE SECTION -->
+
 
             <!-- Loading State -->
             <div id="loading" class="text-center py-4">
@@ -290,8 +296,9 @@
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuxbNh5Y8UYVwMR752Z5rqNcPAvdzrUvfuAr_ifFcXt2UjQZ5K4xzt0jhHUd3hGFNbUtPpqSmXDxym/pub?gid=497369614&single=true&output=csv';
 
         // --- GLOBAL VARIABLES ---
-        let plantData = []; // To store all plant data from CSV
-        let selectedPlants = []; // To store plants chosen by the user
+        let plantData = []; // To store ALL plant data from CSV
+        // *** REFACTOR ***: We now only store the BINOMIAL NAMES (strings) of selected plants
+        let selectedPlantBinomials = []; // To store plants chosen by the user
 
         // --- DOM ELEMENTS ---
         const loadingEl = document.getElementById('loading');
@@ -339,17 +346,15 @@
 
         /**
          * Main function to fetch data and set up the app.
-         * Reverted to PapaParse's built-in downloader.
          */
         function initializeApp() {
-            // Load selected plants from local storage
-            loadSelectedPlants();
+            // *** REFACTOR ***: Load the *list* of names first.
+            loadSelectedBinomials();
 
             try {
-                // Use PapaParse's built-in downloader by setting `download: true`
-                // This is often more reliable for Google Sheets than manual fetch.
+                // Use PapaParse's built-in downloader
                 Papa.parse(GOOGLE_SHEET_URL, {
-                    download: true, // Key change: tells PapaParse to download the file
+                    download: true,
                     header: true,
                     skipEmptyLines: true,
                     complete: (results) => {
@@ -357,14 +362,15 @@
                             plantData = results.data;
                             loadingEl.classList.add('hidden');
                             controlsEl.classList.remove('hidden');
+                            // *** REFACTOR ***: Now that plantData is loaded,
+                            // render the selected plants list using the fresh data.
+                            renderSelectedPlants();
                             setupEventListeners();
                         } else {
-                            // Handle case where download is successful but data is empty
                             throw new Error('No data found in CSV.');
                         }
                     },
                     error: (err) => {
-                        // This will catch download errors (like network, CORS) or parsing errors
                         console.error('PapaParse error:', err);
                         let errorMsg = err.message || 'An unknown error occurred.';
                         if (err.message && err.message.includes('No URL')) {
@@ -375,7 +381,6 @@
                 });
 
             } catch (err) {
-                // This catches any synchronous errors, though most will be in the callbacks.
                 console.error('Failed to initiate PapaParse:', err);
                 showError(`Failed to load data. Error: ${err.message}`);
             }
@@ -430,12 +435,16 @@
             }
 
             const results = plantData.filter(plant => {
-                // Added checks to ensure plant properties exist before calling .toLowerCase()
                 const binomialMatch = plant.Binomial && plant.Binomial.toLowerCase().includes(query);
                 const commonNameMatch = plant['Common Name'] && plant['Common Name'].toLowerCase().includes(query);
                 const vernacularMatch = plant.Vernacular && plant.Vernacular.toLowerCase().includes(query);
                 return binomialMatch || commonNameMatch || vernacularMatch;
-            }).sort((a, b) => a.Binomial.localeCompare(b.Binomial)); // Sort results alphabetically
+            }).sort((a, b) => {
+                // Handle potential nulls in sorting
+                const binA = a.Binomial || '';
+                const binB = b.Binomial || '';
+                return binA.localeCompare(binB);
+            });
 
             if (results.length === 0) {
                 searchResults.innerHTML = '<p class="text-gray-500 p-4 text-sm">No plants found.</p>';
@@ -444,7 +453,7 @@
 
             results.forEach(plant => {
                 const div = document.createElement('div');
-                div.className = 'p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100'; // Corrected class
+                div.className = 'p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100';
                 div.innerHTML = `
                     <p class="font-medium text-gray-800">${plant.Binomial || 'N/A'}</p>
                     <p class="text-sm text-gray-600">${plant['Common Name'] || 'N/A'}</p>
@@ -463,19 +472,16 @@
                 return;
             }
             
-            // Avoid duplicates, handling null/undefined binomials
-            const newBinomial = plant.Binomial || null; // Standardize to null
-            if (selectedPlants.find(p => (p.Binomial || null) === newBinomial)) {
+            // *** REFACTOR ***: Standardize to null and check against the string list
+            const newBinomial = plant.Binomial || null;
+            if (selectedPlantBinomials.includes(newBinomial)) {
                 console.warn(`${newBinomial || 'Selected plant'} is already in the list.`);
-                plantModal.classList.add('hidden');
-                plantSearch.value = '';
-                searchResults.innerHTML = '';
-                return;
+            } else {
+                selectedPlantBinomials.push(newBinomial);
+                saveSelectedBinomials();
+                renderSelectedPlants();
             }
 
-            selectedPlants.push(plant);
-            saveSelectedPlants();
-            renderSelectedPlants();
             plantModal.classList.add('hidden');
             plantSearch.value = '';
             searchResults.innerHTML = '';
@@ -485,15 +491,13 @@
          * Remove a plant from the selected list
          */
         function removePlant(binomialName) {
-            // *** FIX #3: Correctly handle 'null' string from dataset ***
+            // *** REFACTOR ***: Standardize comparison
             if (binomialName === "null") {
-                // If binomialName is the string "null", filter for actual null values
-                selectedPlants = selectedPlants.filter(p => p.Binomial !== null);
+                selectedPlantBinomials = selectedPlantBinomials.filter(b => b !== null);
             } else {
-                // Otherwise, filter by the string name
-                selectedPlants = selectedPlants.filter(p => p.Binomial !== binomialName);
+                selectedPlantBinomials = selectedPlantBinomials.filter(b => b !== binomialName);
             }
-            saveSelectedPlants();
+            saveSelectedBinomials();
             renderSelectedPlants();
         }
 
@@ -501,24 +505,34 @@
          * Render the list of selected plants in the UI
          */
         function renderSelectedPlants() {
+            // This function can only run *after* plantData is loaded
+            if (plantData.length === 0 && selectedPlantBinomials.length > 0) {
+                console.log('Waiting for plantData to load before rendering selected list...');
+                return; // Wait for initializeApp to call this again
+            }
+
             selectedPlantsList.innerHTML = ''; // Clear list
 
-            if (selectedPlants.length === 0) {
+            if (selectedPlantBinomials.length === 0) {
                 emptyListMsg.classList.remove('hidden');
             } else {
                 emptyListMsg.classList.add('hidden');
-                selectedPlants.forEach(plant => {
-                    // Safety check for null/undefined plant objects in the array
-                    if (!plant) return; 
-
+                
+                selectedPlantBinomials.forEach(binomial => {
+                    // *** REFACTOR ***: Find the *fresh* plant data
+                    const plant = plantData.find(p => (p.Binomial || null) === binomial);
+                    
                     const li = document.createElement('li');
                     li.className = 'flex items-center justify-between bg-white p-2 border border-gray-200 rounded-md shadow-sm';
                     
                     // Pass 'null' as a string to the dataset if binomial is null
-                    const dataBinomial = plant.Binomial === null ? 'null' : plant.Binomial;
+                    const dataBinomial = binomial === null ? 'null' : binomial;
+                    
+                    // Use N/A if plant not found (e.g., deleted from CSV but still in localStorage)
+                    const displayName = plant ? (plant.Binomial || 'N/A') : (binomial || 'N/A (Not Found)');
 
                     li.innerHTML = `
-                        <span class="text-sm font-medium text-gray-700">${plant.Binomial || 'N/A'}</span>
+                        <span class="text-sm font-medium text-gray-700">${displayName}</span>
                         <button class="remove-plant-btn text-red-500 hover:text-red-700 transition duration-150" data-binomial="${dataBinomial}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
@@ -528,12 +542,11 @@
             }
 
             // Update plant count
-            plantCountEl.textContent = selectedPlants.length;
+            plantCountEl.textContent = selectedPlantBinomials.length;
 
             // Add event listeners to new remove buttons
             document.querySelectorAll('.remove-plant-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // Use currentTarget to ensure we get the button, even if SVG is clicked
                     removePlant(e.currentTarget.dataset.binomial);
                 });
             });
@@ -543,43 +556,39 @@
          * Clear the selected plants list
          */
         function resetSelectedPlants() {
-            // Replaced confirm() with a console log and direct action, as confirm() is disallowed.
-            // In a real app, you'd build a custom modal here.
             console.log('Resetting list...');
-            selectedPlants = [];
-            saveSelectedPlants();
+            selectedPlantBinomials = [];
+            saveSelectedBinomials();
             renderSelectedPlants();
         }
 
         /**
-         * Save the current list of selected plants to localStorage
+         * *** REFACTOR ***: Save the list of binomial strings to localStorage
          */
-        function saveSelectedPlants() {
-            localStorage.setItem('selectedPlants', JSON.stringify(selectedPlants));
+        function saveSelectedBinomials() {
+            localStorage.setItem('selectedPlantBinomials', JSON.stringify(selectedPlantBinomials));
         }
 
         /**
-         * Load selected plants from localStorage
+         * *** REFACTOR ***: Load the list of binomial strings from localStorage
          */
-        function loadSelectedPlants() {
-            const storedPlants = localStorage.getItem('selectedPlants');
-            if (storedPlants) {
-                // *** FIX #2: Safely parse and filter localStorage data ***
+        function loadSelectedBinomials() {
+            const storedBinomials = localStorage.getItem('selectedPlantBinomials');
+            if (storedBinomials) {
                 try {
-                    const parsed = JSON.parse(storedPlants);
+                    const parsed = JSON.parse(storedBinomials);
                     if (Array.isArray(parsed)) {
-                        // Filter out any null, undefined, or non-object entries
-                        selectedPlants = parsed.filter(p => p && typeof p === 'object');
+                        // Filter out any non-string or invalid entries (though should be strings/null)
+                        selectedPlantBinomials = parsed.filter(b => typeof b === 'string' || b === null);
                     } else {
-                        selectedPlants = []; // Malformed data, reset
+                        selectedPlantBinomials = []; // Malformed data
                     }
                 } catch (e) {
                     console.error('Failed to parse localStorage, resetting.', e);
-                    selectedPlants = []; // Corrupt JSON, reset
+                    selectedPlantBinomials = []; // Corrupt JSON
                 }
-                saveSelectedPlants(); // Re-save the cleaned array
-                renderSelectedPlants();
             }
+            // We do NOT render here. We wait for plantData to load.
         }
 
         /**
@@ -602,7 +611,7 @@
         function generateLabels() {
             labelOutput.innerHTML = ''; // Clear previous labels
 
-            if (selectedPlants.length === 0) {
+            if (selectedPlantBinomials.length === 0) {
                 labelOutputPlaceholder.classList.remove('hidden');
                 printControls.classList.add('hidden');
                 return;
@@ -615,15 +624,23 @@
             const textColor = textColorPicker.value;
             const institutionName = document.getElementById('institutionName').value.trim();
 
-            // Set CSS variables for print styles
             document.documentElement.style.setProperty('--label-bg-color', bgColor);
             document.documentElement.style.setProperty('--label-text-color', textColor);
 
-            selectedPlants.forEach((plant, index) => {
-                // *** FIX #1: Add a guard clause to skip null/invalid plant objects ***
+            // *** REFACTOR ***: Loop over the list of names, not objects
+            selectedPlantBinomials.forEach((binomial, index) => {
+                
+                // *** REFACTOR ***: Find the *fresh* plant data from the master list
+                const plant = plantData.find(p => (p.Binomial || null) === binomial);
+
+                // *** SAFETY CHECK ***: If plant not found (e.g., deleted from CSV), skip it
                 if (!plant) {
-                    console.error('Skipping invalid plant data in generateLabels:', plant);
-                    return; // This skips the current iteration and continues the loop
+                    console.error('Skipping label generation: Plant not found in master data:', binomial);
+                    const errorCard = document.createElement('div');
+                    errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700';
+                    errorCard.innerHTML = `<p class="font-bold">Error: Plant Not Found</p><p>The plant "${binomial || 'N/A'}" could not be found in the database. It may have been renamed or deleted.</p>`;
+                    labelOutput.appendChild(errorCard);
+                    return; // Skips this iteration and continues the loop
                 }
 
                 const qrId = `qr-${index}`;
@@ -638,7 +655,7 @@
                 // --- 2. Institution Name (Optional) ---
                 if (institutionName) {
                     const institutionP = document.createElement('p');
-                    institutionP.className = 'institution-name text-center font-bold text-lg'; // Using a class for print styling
+                    institutionP.className = 'institution-name text-center font-bold text-lg';
                     institutionP.textContent = institutionName;
                     labelCard.appendChild(institutionP);
                 }
@@ -652,11 +669,11 @@
                 textDiv.className = 'label-text';
 
                 // Binomial Name
-                const binomialName = document.createElement('div');
-                binomialName.className = 'binomial-box';
-                binomialName.style.borderColor = textColor; // Use text color for inner border
-                binomialName.innerHTML = formatBinomialName(plant.Binomial); // This is now safe
-                textDiv.appendChild(binomialName);
+                const binomialNameEl = document.createElement('div');
+                binomialNameEl.className = 'binomial-box';
+                binomialNameEl.style.borderColor = textColor;
+                binomialNameEl.innerHTML = formatBinomialName(plant.Binomial); // Now using fresh data
+                textDiv.appendChild(binomialNameEl);
 
                 // Family
                 const familyName = document.createElement('p');
@@ -676,20 +693,20 @@
                 vernacularName.textContent = plant.Vernacular || ' ';
                 textDiv.appendChild(vernacularName);
 
-                contentWrapper.appendChild(textDiv); // Append textDiv to wrapper
+                contentWrapper.appendChild(textDiv);
 
                 // --- QR Code ---
                 const qrDiv = document.createElement('div');
                 qrDiv.id = qrId;
                 qrDiv.className = 'label-qr-code';
-                contentWrapper.appendChild(qrDiv); // Append qrDiv to wrapper
+                contentWrapper.appendChild(qrDiv);
 
-                labelCard.appendChild(contentWrapper); // Append wrapper to card
+                labelCard.appendChild(contentWrapper);
 
                 // --- 4. Footer Box ---
                 const footerBox = document.createElement('div');
                 footerBox.className = 'footer-box';
-                footerBox.style.borderColor = textColor; // Use text color for border
+                footerBox.style.borderColor = textColor;
 
                 const footerP = document.createElement('p');
                 footerP.className = 'footer-note';
@@ -698,13 +715,13 @@
                 footerBox.appendChild(footerP);
                 labelCard.appendChild(footerBox);
 
-                // Append the card to the output *before* generating the QR code
+                // Append the card to the output
                 labelOutput.appendChild(labelCard);
 
                 // --- Generate the QR Code ---
                 try {
                     new QRCode(qrId, {
-                        text: plant.ShortURL || 'N/A',
+                        text: plant.ShortURL || 'N/A', // Using fresh data
                         width: 100,
                         height: 100,
                         colorDark: textColor,
@@ -725,7 +742,6 @@
             const layout = printLayoutSelect.value;
             updatePrintStyles(layout);
 
-            // Give styles a moment to apply before triggering print
             setTimeout(() => {
                 window.print();
             }, 100);
