@@ -141,15 +141,45 @@
     <div class="max-w-7xl mx-auto space-y-8">
 
         <!-- ===== Top Section: Control Panel ===== -->
-        <!-- Removed lg:col-span-1, h-fit, sticky, top-8 -->
-        <div class="bg-white p-6 rounded-xl shadow-lg">
-            <!-- MODIFIED TITLE SECTION -->
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">QRit</h1>
-            <p class="text-sm text-gray-600 mb-6">
+        <!-- ADDED ID: controls-block -->
+        <div id="controls-block" class="bg-white p-6 rounded-xl shadow-lg">
+
+            <!-- START: NEW PROFESSIONAL HEADER BLOCK -->
+            <header class="text-center mb-6 border-b pb-4 border-gray-200">
+                <!-- QRit Title (Top, Larger) -->
+                <h1 class="text-4xl sm:text-5xl font-extrabold text-blue-800 mb-4 tracking-wider">QRit</h1>
+
+                <!-- Ribbon/Banner -->
+                <div
+                    class="bg-blue-50 border-y-4 border-blue-600 p-3 sm:p-4 shadow-xl flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-4 rounded-lg max-w-4xl mx-auto">
+
+                    <!-- Left Logo -->
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                        <img src="https://i.postimg.cc/DzmrxPMQ/blue-EMBLEM.png"
+                            onerror="this.onerror=null; this.src='https://placehold.co/80x80/0000FF/FFFFFF?text=Logo1';"
+                            alt="College Emblem" class="w-full h-full object-contain">
+                    </div>
+
+                    <!-- Center Text -->
+                    <div class="flex flex-col mx-2 flex-grow text-center text-gray-800">
+                        <p class="text-xl sm:text-2xl font-bold leading-tight">Department of Botany</p>
+                        <p class="text-sm sm:text-base font-medium text-gray-600 mt-1">Government Victoria College, Palakkad</p>
+                    </div>
+
+                    <!-- Right Logo -->
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                        <img src="https://i.postimg.cc/BvSGvdP9/75Logo2.png"
+                            onerror="this.onerror=null; this.src='https://placehold.co/80x80/FF6600/FFFFFF?text=Logo2';"
+                            alt="75th Anniversary Logo" class="w-full h-full object-contain">
+                    </div>
+                </div>
+            </header>
+            <!-- END: NEW PROFESSIONAL HEADER BLOCK -->
+            
+            <!-- Original descriptive text, now centered below the main header -->
+            <p class="text-sm text-gray-600 mb-6 text-center">
                 the plant qr code generation service by the Department of Botany, Government Victoria College, Palakkad.
             </p>
-            <!-- END MODIFIED TITLE SECTION -->
-
 
             <!-- Loading State -->
             <div id="loading" class="text-center py-4">
@@ -335,8 +365,8 @@
         </div>
 
         <!-- ===== Bottom Section: Label Output ===== -->
-        <!-- Removed lg:col-span-2 -->
-        <div>
+        <!-- ADDED ID: label-container -->
+        <div id="label-container">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">Generated Labels</h2>
             <div id="label-output-placeholder" class="text-center py-16 bg-white rounded-xl shadow-lg">
                 <p class="text-lg text-gray-500">Your generated labels will appear here.</p>
@@ -429,6 +459,12 @@
         const printControls = document.getElementById('print-controls');
         const printBtn = document.getElementById('printBtn');
         const printStyles = document.getElementById('print-styles');
+        
+        // NEW HTML IDs for print control
+        const controlsBlock = document.getElementById('controls-block');
+        const labelContainer = document.getElementById('label-container');
+        const mainWrapper = document.querySelector('.max-w-7xl');
+
 
         // NEW Download DOM Elements
         const downloadPngBtn = document.getElementById('downloadPngBtn');
@@ -677,7 +713,7 @@
                 binomial: plant.Binomial,
                 customUrl: customUrl
             };
-            
+
             // Check if plant is already selected based on binomial
             if (selectedPlants.some(p => p.binomial === newPlant.binomial)) {
                 console.warn(`${newPlant.binomial} is already in the list.`);
@@ -731,7 +767,7 @@
                     li.className = 'flex items-center justify-between bg-white p-2 border border-gray-200 rounded-md shadow-sm';
 
                     const displayName = plant ? (plant.Binomial || 'N/A') : (binomial || 'N/A (Not Found)');
-                    
+
                     // Display detail based on customUrl presence
                     const detailText = customUrl ?
                         `<span class="text-xs text-blue-500 block truncate" style="max-width: 150px;">Custom URL: ${customUrl}</span>` :
@@ -831,8 +867,8 @@
                 return;
             }
 
-            // --- NEW: LIMIT ---
-            const MAX_LABELS = 100; // Set a reasonable limit
+            // --- UPDATED LIMIT: 20 LABELS ---
+            const MAX_LABELS = 20;
             if (selectedPlants.length > MAX_LABELS) {
                 console.error(`Too many labels. Limit is ${MAX_LABELS}.`);
                 labelOutputPlaceholder.classList.add('hidden');
@@ -843,7 +879,7 @@
                 labelOutput.appendChild(errorCard);
                 return;
             }
-            // --- END: LIMIT ---
+            // --- END UPDATED LIMIT ---
 
             labelOutputPlaceholder.classList.add('hidden');
             printControls.classList.remove('hidden');
@@ -1016,24 +1052,53 @@
             printStyles.innerHTML = `
                 @media print {
                     /* === 1. VISIBILITY RULES === */
-                    /* Hide everything except the output */
+                    /* Hide everything except the label container */
                     body * {
                         visibility: hidden;
                     }
-                    #label-output, #label-output * {
+
+                    /* Explicitly make the label container and its descendants visible */
+                    #label-container, #label-output, #label-output * {
                         visibility: visible;
+                        display: block; /* Ensures container is rendered */
                     }
-                    #label-output {
-                        position: absolute;
+                    
+                    /* Hide non-printable UI elements within the visible container chain */
+                    #controls-block, 
+                    #label-output-placeholder,
+                    #label-container h2 {
+                        display: none !important;
+                        visibility: hidden !important;
+                    }
+
+                    /* Reset main wrapper/body margins for edge-to-edge printing */
+                    .max-w-7xl {
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+
+                    body {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: white !important;
+                    }
+                    
+                    /* Reset position for clean page flow */
+                    #label-container {
+                        position: relative; 
                         left: 0;
                         top: 0;
                         width: 100%;
+                        padding: 0;
+                        margin: 0;
                     }
 
-                    /* === 2. PAGE LAYOUT RULES === */
+
+                    /* === 2. PAGE LAYOUT RULES (FIXED MARGIN) === */
                     @page {
                         size: ${size} ${orientation};
-                        margin: 0.5in; /* Standard margin */
+                        margin: 0.4in; /* INCREASED MARGIN TO 0.4 INCH FOR SAFETY */
                     }
 
                     /* === 3. GRID LAYOUT RULES === */
@@ -1041,9 +1106,8 @@
                         display: grid;
                         grid-template-columns: repeat(${columns}, 1fr);
                         grid-template-rows: repeat(${rows}, 1fr);
-                        gap: 0.25in; /* Gap between labels */
+                        gap: 0.15in; /* Reduced gap slightly for tighter packing */
                         width: 100%;
-                        height: 100%; /* Fill the page */
                     }
 
                     /* === 4. LABEL STYLING RULES === */
@@ -1052,6 +1116,7 @@
                         border: 2px solid ${textColor} !important;
                         background-color: ${bgColor} !important;
                         color: ${textColor} !important;
+                        /* Crucial for printing colors */
                         -webkit-print-color-adjust: exact;
                         color-adjust: exact;
                     }
@@ -1083,15 +1148,23 @@
                 const columns = numColumnsSelectH.value;
                 const rows = numRowsSelectV.value;
 
+                if (labelOutput.children.length === 0) {
+                    // Using console.error instead of alert per guidelines
+                    console.error('Print failed: Please generate labels first.');
+                    return;
+                }
+
                 console.log(`Updating print styles: ${size} ${orientation}, ${columns}x${rows}`);
 
                 updatePrintStyles(size, orientation, columns, rows);
 
-                // FIX: Calling window.print() synchronously immediately after DOM manipulation.
-                console.log("Styles updated, calling window.print() synchronously...");
-                window.print();
-
-                console.log("Print dialog should be open.");
+                // FIX: Added a microtask delay (50ms) to ensure CSS is applied
+                // before print dialog opens, fixing the "Loading Preview" or "White Page" issues.
+                console.log("Styles updated. Applying 50ms delay before printing...");
+                setTimeout(() => {
+                    window.print();
+                    console.log("Print dialog should be open.");
+                }, 50);
 
             } catch (err) {
                 console.error("Error in handlePrint:", err);
@@ -1106,7 +1179,7 @@
             const targetElement = document.getElementById('label-output');
 
             if (targetElement.children.length === 0) {
-                alert('Please generate labels first.');
+                console.error('Download failed: Please generate labels first.');
                 return;
             }
 
@@ -1134,7 +1207,7 @@
                 console.log("PNG download triggered.");
             }).catch(error => {
                 console.error("Error generating PNG:", error);
-                alert('Error generating PNG image. Check the console for details.');
+                // alert('Error generating PNG image. Check the console for details.');
             });
         }
 
@@ -1145,7 +1218,7 @@
             console.log("Starting PDF generation process...");
 
             if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
-                alert('PDF/Image libraries failed to load. Please try refreshing.');
+                console.error('PDF/Image libraries failed to load. Please try refreshing.');
                 return;
             }
 
@@ -1155,7 +1228,7 @@
             const labels = Array.from(document.querySelectorAll('.label-card'));
 
             if (labels.length === 0) {
-                alert('Please generate labels before downloading a PDF.');
+                console.error('Download failed: Please generate labels before downloading a PDF.');
                 return;
             }
 
@@ -1173,11 +1246,11 @@
             document.body.appendChild(loadingMessage);
 
             let yOffset = 10; // Initial vertical offset (margin)
-            const margin = 10; // 10mm margin
+            const margin = 10; // INCREASED margin to 10mm (approx 0.4in)
             const pageHeight = doc.internal.pageSize.getHeight();
             const pageWidth = doc.internal.pageSize.getWidth();
             const numCols = parseInt(numColumnsSelectH.value, 10) || 2;
-            const gap = 5; // 5mm gap between labels
+            const gap = 4; // 4mm gap between labels
             const availableWidth = pageWidth - (2 * margin);
             let imgWidth = (availableWidth - ((numCols - 1) * gap)) / numCols;
 
