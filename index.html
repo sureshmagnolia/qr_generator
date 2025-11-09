@@ -10,6 +10,8 @@
     <!-- 2. PapaParse and QRCode.js moved to end of <body> -->
     <!-- 3. Load Inter font -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <!-- ADDED: Load Anek Malayalam font for Common Name -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;600;700&display=swap">
     <!-- 4. Dynamic Print Styles - this will be populated by JavaScript -->
     <style id="print-styles"></style>
     <!-- 5. Base Styles -->
@@ -52,13 +54,19 @@
             /* Center-align common and vernacular names */
         }
 
-        .label-text .common-name,
+        /* MODIFIED: Separated common and vernacular for unique font */
+        .label-text .common-name {
+            text-align: center;
+            font-family: 'Anek Malayalam', sans-serif; /* Applied Anek Malayalam */
+        }
+
         .label-text .vernacular-name {
             text-align: center;
         }
 
         .binomial-box {
-            border: 1px solid #d1d5db;
+            /* MODIFIED: Border set to transparent */
+            border: 1px solid transparent;
             /* gray-300 */
             border-radius: 0.375rem;
             padding: 0.5rem;
@@ -132,7 +140,7 @@
             <!-- MODIFIED TITLE SECTION -->
             <h1 class="text-3xl font-bold text-gray-800 mb-2">QRit</h1>
             <p class="text-sm text-gray-600 mb-6">
-                The plant QR code generation service by the Department of Botany, Government Victoria College, Palakkad.
+                the plant qr code generation service by the Department of Botany, Government Victoria College, Palakkad.
             </p>
             <!-- END MODIFIED TITLE SECTION -->
 
@@ -609,9 +617,11 @@
          * Generate the QR labels for all selected plants
          */
         function generateLabels() {
+            console.log('--- Generating Labels ---'); // DEBUG
             labelOutput.innerHTML = ''; // Clear previous labels
 
             if (selectedPlantBinomials.length === 0) {
+                console.log('No plants selected. Aborting.'); // DEBUG
                 labelOutputPlaceholder.classList.remove('hidden');
                 printControls.classList.add('hidden');
                 return;
@@ -627,99 +637,117 @@
             document.documentElement.style.setProperty('--label-bg-color', bgColor);
             document.documentElement.style.setProperty('--label-text-color', textColor);
 
-            // *** REFACTOR ***: Loop over the list of names, not objects
+            // Loop over the list of names, not objects
             selectedPlantBinomials.forEach((binomial, index) => {
                 
-                // *** REFACTOR ***: Find the *fresh* plant data from the master list
-                const plant = plantData.find(p => (p.Binomial || null) === binomial);
-
-                // *** SAFETY CHECK ***: If plant not found (e.g., deleted from CSV), skip it
-                if (!plant) {
-                    console.error('Skipping label generation: Plant not found in master data:', binomial);
-                    const errorCard = document.createElement('div');
-                    errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700';
-                    errorCard.innerHTML = `<p class="font-bold">Error: Plant Not Found</p><p>The plant "${binomial || 'N/A'}" could not be found in the database. It may have been renamed or deleted.</p>`;
-                    labelOutput.appendChild(errorCard);
-                    return; // Skips this iteration and continues the loop
-                }
-
-                const qrId = `qr-${index}`;
-
-                // --- 1. Create Label Card ---
-                const labelCard = document.createElement('div');
-                labelCard.className = 'label-card';
-                labelCard.style.backgroundColor = bgColor;
-                labelCard.style.color = textColor;
-                labelCard.style.borderColor = textColor;
-
-                // --- 2. Institution Name (Optional) ---
-                if (institutionName) {
-                    const institutionP = document.createElement('p');
-                    institutionP.className = 'institution-name text-center font-bold text-lg';
-                    institutionP.textContent = institutionName;
-                    labelCard.appendChild(institutionP);
-                }
-
-                // --- 3. Content Wrapper (Text + QR) ---
-                const contentWrapper = document.createElement('div');
-                contentWrapper.className = 'label-content-wrapper';
-
-                // --- Text Content ---
-                const textDiv = document.createElement('div');
-                textDiv.className = 'label-text';
-
-                // Binomial Name
-                const binomialNameEl = document.createElement('div');
-                binomialNameEl.className = 'binomial-box';
-                binomialNameEl.style.borderColor = textColor;
-                binomialNameEl.innerHTML = formatBinomialName(plant.Binomial); // Now using fresh data
-                textDiv.appendChild(binomialNameEl);
-
-                // Family
-                const familyName = document.createElement('p');
-                familyName.className = 'family-name text-center font-medium';
-                familyName.textContent = plant.Family || ' ';
-                textDiv.appendChild(familyName);
-
-                // Common Name
-                const commonName = document.createElement('p');
-                commonName.className = 'common-name text-lg font-semibold';
-                commonName.textContent = plant['Common Name'] || ' ';
-                textDiv.appendChild(commonName);
-
-                // Vernacular Name
-                const vernacularName = document.createElement('p');
-                vernacularName.className = 'vernacular-name text-md';
-                vernacularName.textContent = plant.Vernacular || ' ';
-                textDiv.appendChild(vernacularName);
-
-                contentWrapper.appendChild(textDiv);
-
-                // --- QR Code ---
-                const qrDiv = document.createElement('div');
-                qrDiv.id = qrId;
-                qrDiv.className = 'label-qr-code';
-                contentWrapper.appendChild(qrDiv);
-
-                labelCard.appendChild(contentWrapper);
-
-                // --- 4. Footer Box ---
-                const footerBox = document.createElement('div');
-                footerBox.className = 'footer-box';
-                footerBox.style.borderColor = textColor;
-
-                const footerP = document.createElement('p');
-                footerP.className = 'footer-note';
-                footerP.textContent = 'Generated by the QRit, Department of Botany, Government Victoria College, Palakkad.';
-
-                footerBox.appendChild(footerP);
-                labelCard.appendChild(footerBox);
-
-                // Append the card to the output
-                labelOutput.appendChild(labelCard);
-
-                // --- Generate the QR Code ---
+                // *** ADDED: Main try...catch block ***
+                // This will catch errors on a per-label basis and not crash the loop
                 try {
+                    console.log(`Processing label #${index}: ${binomial}`); // DEBUG
+
+                    // Find the *fresh* plant data from the master list
+                    const plant = plantData.find(p => (p.Binomial || null) === binomial);
+
+                    // SAFETY CHECK: If plant not found (e.g., deleted from CSV), skip it
+                    if (!plant) {
+                        console.error('Skipping label: Plant not found in master data:', binomial); // DEBUG
+                        const errorCard = document.createElement('div');
+                        errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700';
+                        errorCard.innerHTML = `<p class="font-bold">Error: Plant Not Found</p><p>The plant "${binomial || 'N/A'}" could not be found in the database. It may have been renamed or deleted.</p>`;
+                        labelOutput.appendChild(errorCard);
+                        return; // Skips this iteration and continues the loop
+                    }
+
+                    // *** ADDED: Log the found plant data ***
+                    console.log('Found plant data:', plant); // DEBUG
+
+                    const qrId = `qr-${index}`;
+
+                    // --- 1. Create Label Card ---
+                    const labelCard = document.createElement('div');
+                    labelCard.className = 'label-card';
+                    labelCard.style.backgroundColor = bgColor;
+                    labelCard.style.color = textColor;
+                    labelCard.style.borderColor = textColor;
+
+                    // --- 2. Institution Name (Optional) ---
+                    // MODIFIED: Create a wrapper div for padding and transparent border
+                    if (institutionName) {
+                        const institutionDiv = document.createElement('div');
+                        // Added classes for a box, border-transparent, and padding
+                        institutionDiv.className = 'institution-name-box border border-transparent rounded-lg p-2 text-center font-bold text-lg';
+                        
+                        const institutionP = document.createElement('p');
+                        institutionP.className = 'institution-name'; // Class for print styling
+                        institutionP.style.overflowWrap = 'break-word'; // Force wrapping
+                        institutionP.style.wordBreak = 'break-word'; // Fallback
+                        institutionP.textContent = institutionName;
+                        
+                        institutionDiv.appendChild(institutionP); // Put the text inside the box
+                        labelCard.appendChild(institutionDiv); // Add the box to the card
+                    }
+
+                    // --- 3. Content Wrapper (Text + QR) ---
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'label-content-wrapper';
+
+                    // --- Text Content ---
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'label-text';
+
+                    // Binomial Name
+                    const binomialNameEl = document.createElement('div');
+                    binomialNameEl.className = 'binomial-box';
+                    // MODIFIED: Set border to transparent explicitly
+                    binomialNameEl.style.borderColor = 'transparent';
+                    binomialNameEl.innerHTML = formatBinomialName(plant.Binomial); // Now using fresh data
+                    textDiv.appendChild(binomialNameEl);
+
+                    // Family
+                    const familyName = document.createElement('p');
+                    familyName.className = 'family-name text-center font-medium';
+                    familyName.textContent = plant.Family || ' ';
+                    textDiv.appendChild(familyName);
+
+                    // Common Name
+                    const commonName = document.createElement('p');
+                    commonName.className = 'common-name text-lg font-semibold';
+                    commonName.textContent = plant['Common Name'] || ' ';
+                    textDiv.appendChild(commonName);
+
+                    // Vernacular Name
+                    const vernacularName = document.createElement('p');
+                    vernacularName.className = 'vernacular-name text-md';
+                    vernacularName.textContent = plant.Vernacular || ' ';
+                    textDiv.appendChild(vernacularName);
+
+                    contentWrapper.appendChild(textDiv);
+
+                    // --- QR Code ---
+                    const qrDiv = document.createElement('div');
+                    qrDiv.id = qrId;
+                    qrDiv.className = 'label-qr-code';
+                    contentWrapper.appendChild(qrDiv);
+
+                    labelCard.appendChild(contentWrapper);
+
+                    // --- 4. Footer Box ---
+                    const footerBox = document.createElement('div');
+                    footerBox.className = 'footer-box';
+                    footerBox.style.borderColor = textColor;
+
+                    const footerP = document.createElement('p');
+                    footerP.className = 'footer-note';
+                    footerP.textContent = 'Generated by The QRit service by the Department of Botany, Government Victoria College, Palakkad.';
+
+                    footerBox.appendChild(footerP);
+                    labelCard.appendChild(footerBox);
+
+                    // Append the card to the output
+                    labelOutput.appendChild(labelCard);
+
+                    // --- Generate the QR Code ---
+                    // This is now inside the try...catch block
                     new QRCode(qrId, {
                         text: plant.ShortURL || 'N/A', // Using fresh data
                         width: 100,
@@ -728,12 +756,18 @@
                         colorLight: bgColor,
                         correctLevel: QRCode.CorrectLevel.H
                     });
+                
                 } catch (error) {
-                    console.error('Failed to generate QR code for', plant.Binomial, error);
-                    document.getElementById(qrId).innerHTML = '<p class="text-xs text-red-500">QR Error</p>';
+                    // *** ADDED: Catch block for this specific label ***
+                    console.error(`CRITICAL: Failed to generate label for "${binomial}". Error:`, error);
+                    const errorCard = document.createElement('div');
+                    errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700';
+                    errorCard.innerHTML = `<p class="font-bold">Error Generating Label</p><p>Failed to create label for "${binomial || 'N/A'}". Check console for details.</p>`;
+                    labelOutput.appendChild(errorCard);
                 }
             });
         }
+
 
         /**
          * Handle Print Button Click
@@ -784,11 +818,18 @@
                     align-items: center;
                     width: 100%;
                 }
+                
+                /* MODIFIED: Added wrapper box and wrapping */
+                .institution-name-box {
+                    border: 1px solid transparent !important; /* Transparent border */
+                    padding: 2mm;
+                }
                 .institution-name {
                     text-align: center;
                     font-weight: bold;
                     font-size: 1.1rem;
-                    margin-bottom: 2mm;
+                    overflow-wrap: break-word; /* Ensure wrapping */
+                    word-break: break-word;
                 }
                 .footer-box {
                     border-top: 1px solid var(--label-text-color, black) !important;
@@ -802,8 +843,13 @@
                     opacity: 0.75;
                 }
                 .binomial-box {
-                    border-color: var(--label-text-color, black) !important;
+                    /* MODIFIED: Transparent border */
+                    border-color: transparent !important; 
                     overflow-wrap: break-word; /* Ensure wrapping in print */
+                }
+                /* ADDED: Apply Anek Malayalam font to common name */
+                .common-name {
+                    font-family: 'Anek Malayalam', sans-serif;
                 }
                 .label-qr-code img {
                     width: 100px;
@@ -821,9 +867,15 @@
                     grid-template-columns: 1fr 80px; /* Smaller QR */
                     gap: 2mm;
                 }
+                /* MODIFIED: Added wrapper box and wrapping */
+                .institution-name-box {
+                    padding: 1mm;
+                }
                 .institution-name {
                     font-size: 0.9rem;
                     margin-bottom: 1mm;
+                    overflow-wrap: break-word;
+                    word-break: break-word;
                 }
                 .footer-box {
                     padding-top: 1mm;
@@ -837,7 +889,11 @@
                 .label-text { gap: 0.25rem; }
                 .binomial-box { font-size: 0.9rem; padding: 2mm; }
                 .family-name { font-size: 0.8rem; }
-                .common-name { font-size: 1rem; }
+                /* MODIFIED: Added Anek font */
+                .common-name {
+                    font-size: 1rem;
+                    font-family: 'Anek Malayalam', sans-serif;
+                }
                 .vernacular-name { font-size: 0.8rem; }
             `;
 
