@@ -50,24 +50,28 @@
         .label-text {
             display: flex;
             flex-direction: column;
-            gap: 0.25rem; /* Reduced gap for new order */
-            min-width: 0; /* FIX: Prevents text overflow from breaking grid */
+            gap: 0.25rem;
+            /* Reduced gap for new order */
+            min-width: 0;
+            /* FIX: Prevents text overflow from breaking grid */
         }
 
         /* --- NEW ORDER --- */
         .label-text .binomial-box {
             font-weight: 700;
-            font-size: 1.125rem; /* 18px */
+            font-size: 1.125rem;
+            /* 18px */
             line-height: 1.4;
             text-align: center;
             overflow-wrap: break-word;
             word-break: break-word;
         }
-        
+
         .label-text .family-name,
         .label-text .common-name,
         .label-text .vernacular-name {
-            font-size: 0.875rem; /* 14px */
+            font-size: 0.875rem;
+            /* 14px */
             line-height: 1.3;
             text-align: center;
             overflow-wrap: break-word;
@@ -75,9 +79,11 @@
         }
 
         .label-text .common-name {
-            font-family: 'Anek Malayalam', sans-serif; /* Applied Anek Malayalam */
+            font-family: 'Anek Malayalam', sans-serif;
+            /* Applied Anek Malayalam */
             font-weight: 600;
         }
+
         /* --- END NEW ORDER --- */
 
 
@@ -108,13 +114,16 @@
         /* MODIFIED: Footer note for QRit - Smaller and italicized */
         .footer-note {
             text-align: center;
-            font-size: 0.45rem; /* Made slightly smaller */
+            font-size: 0.45rem;
+            /* Made slightly smaller */
             line-height: 1.2;
-            white-space: normal; /* Allow wrapping */
+            white-space: normal;
+            /* Allow wrapping */
             opacity: 0.85;
             overflow-wrap: break-word;
             word-break: break-word;
-            font-style: italic; /* Added italics */
+            font-style: italic;
+            /* Added italics */
         }
 
         /*
@@ -158,7 +167,7 @@
             <div id="controls" class="hidden">
                 <!-- Inner grid for controls -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
+
                     <!-- Left Column -->
                     <div class="space-y-6">
                         <!-- Add Plant Button -->
@@ -168,7 +177,7 @@
                                 + Add Plants to List
                             </button>
                         </div>
-                        
+
                         <!-- Selected Plants List -->
                         <div class="pt-4">
                             <div class="flex justify-between items-center mb-2">
@@ -233,7 +242,7 @@
                     <!-- Right Column -->
                     <div id="print-controls" class="pt-4 hidden space-y-4">
                         <h3 class="text-lg font-semibold text-gray-700 mb-3">Print Options</h3>
-                        
+
                         <!-- Paper Size -->
                         <div>
                             <label for="paperSize" class="block text-sm font-medium text-gray-700 mb-1">
@@ -298,7 +307,7 @@
                         <p class="text-xs text-gray-500 text-center -mt-2">
                             Labels per page (Horizontal x Vertical).
                         </p>
-                        
+
                         <!-- NEW DOWNLOAD BUTTONS -->
                         <button id="downloadPngBtn"
                             class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-200 shadow-sm mt-4">
@@ -361,8 +370,16 @@
                 </label>
                 <input type="text" id="plantSearch" placeholder="e.g., Mangifera indica"
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <div id="searchResults" class="mt-2 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+
+                <!-- Container for search results -->
+                <div id="searchResults"
+                    class="mt-2 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
                     <!-- Search results will be injected here by JS -->
+                </div>
+
+                <!-- NEW: Container for Confirmation and URL Input -->
+                <div id="plantDetailConfirm" class="mt-4 border border-gray-300 rounded-lg p-4 hidden">
+                    <!-- This content is generated dynamically by selectPlant() -->
                 </div>
             </div>
         </div>
@@ -384,7 +401,8 @@
 
         // --- GLOBAL VARIABLES ---
         let plantData = []; // To store ALL plant data from CSV
-        let selectedPlantBinomials = []; // To store plants chosen by the user
+        // RENAMED: Stores objects { binomial: string, customUrl: string | null }
+        let selectedPlants = [];
 
         // --- DOM ELEMENTS ---
         const loadingEl = document.getElementById('loading');
@@ -396,6 +414,9 @@
         const closeModalBtn = document.getElementById('closeModalBtn');
         const plantSearch = document.getElementById('plantSearch');
         const searchResults = document.getElementById('searchResults');
+        // NEW DOM element for confirmation section
+        const plantDetailConfirm = document.getElementById('plantDetailConfirm');
+
         const selectedPlantsList = document.getElementById('selected-plants-list');
         const emptyListMsg = document.getElementById('empty-list-msg');
         const plantCountEl = document.getElementById('plant-count');
@@ -408,7 +429,7 @@
         const printControls = document.getElementById('print-controls');
         const printBtn = document.getElementById('printBtn');
         const printStyles = document.getElementById('print-styles');
-        
+
         // NEW Download DOM Elements
         const downloadPngBtn = document.getElementById('downloadPngBtn');
         const downloadPdfBtn = document.getElementById('downloadPdfBtn');
@@ -418,7 +439,7 @@
         const paperOrientationSelect = document.getElementById('paperOrientation');
         const numColumnsSelectH = document.getElementById('numColumnsH');
         const numRowsSelectV = document.getElementById('numRowsV');
-        
+
 
         // --- INITIALIZATION ---
         // Start polling immediately to check for libraries.
@@ -429,11 +450,11 @@
          * This polls every 100ms until libraries are ready.
          */
         function checkLibrariesAndInit() {
-            if (typeof Papa !== 'undefined' && 
+            if (typeof Papa !== 'undefined' &&
                 typeof QRCode !== 'undefined' &&
                 typeof html2canvas !== 'undefined' &&
                 typeof window.jspdf !== 'undefined') { // Check for new libs
-                
+
                 console.log('Libraries loaded, initializing app...');
                 initializeApp();
             } else {
@@ -447,10 +468,10 @@
          */
         async function initializeApp() {
             // 1. Load any previously selected plants from localStorage
-            loadSelectedBinomials();
-            
+            loadSelectedPlants(); // Updated function name
+
             console.log("Attempting direct fetch...");
-            
+
             try {
                 // 1. Fetch the data directly
                 const response = await fetch(GOOGLE_SHEET_URL);
@@ -509,7 +530,12 @@
          */
         function setupEventListeners() {
             // Modal controls
-            addPlantBtn.addEventListener('click', () => plantModal.classList.remove('hidden'));
+            addPlantBtn.addEventListener('click', () => {
+                plantModal.classList.remove('hidden');
+                // Ensure the initial search view is shown
+                searchResults.classList.remove('hidden');
+                plantDetailConfirm.classList.add('hidden');
+            });
             closeModalBtn.addEventListener('click', () => plantModal.classList.add('hidden'));
             plantModal.addEventListener('click', (e) => {
                 if (e.target === plantModal) {
@@ -528,7 +554,7 @@
 
             // Print functionality
             printBtn.addEventListener('click', handlePrint);
-            
+
             // Download functionality
             downloadPngBtn.addEventListener('click', downloadLabelsAsPng);
             downloadPdfBtn.addEventListener('click', downloadLabelsAsPdf);
@@ -540,6 +566,9 @@
         function handleSearch() {
             const query = plantSearch.value.toLowerCase().trim();
             searchResults.innerHTML = ''; // Clear previous results
+            // Hide detail view when starting a new search
+            plantDetailConfirm.classList.add('hidden');
+            searchResults.classList.remove('hidden');
 
             if (query.length < 3) {
                 searchResults.innerHTML = '<p class="text-gray-500 p-4 text-sm">Please type 3 or more letters to search.</p>';
@@ -570,44 +599,108 @@
                     <p class="font-medium text-gray-800">${plant.Binomial || 'N/A'}</p>
                     <p class="text-sm text-gray-600">${plant['Common Name'] || 'N/A'}</p>
                 `;
+                // Clicking shows the confirmation/URL input form
                 div.onclick = () => selectPlant(plant);
                 searchResults.appendChild(div);
             });
         }
 
         /**
-         * Add a plant to the selected list
+         * Show the confirmation form with optional URL input.
          */
         function selectPlant(plant) {
-            if (!plant) {
-                console.error('Invalid plant object:', plant);
+            if (!plant || !plant.Binomial) {
+                console.error('Invalid plant object or missing Binomial:', plant);
                 return;
             }
+
+            // Hide search results, show detail view
+            searchResults.classList.add('hidden');
+            plantDetailConfirm.classList.remove('hidden');
+
+            const displayName = plant.Binomial;
+            const commonName = plant['Common Name'] || 'N/A';
+
+            plantDetailConfirm.innerHTML = `
+                <h4 class="text-xl font-bold text-gray-800 mb-2">${displayName}</h4>
+                <p class="text-sm text-gray-600 mb-4">Common Name: ${commonName}</p>
+                
+                <div class="mb-4">
+                    <label for="customUrlInput" class="block text-sm font-medium text-gray-700 mb-1">
+                        Optional Custom URL (e.g., your website link)
+                    </label>
+                    <input type="url" id="customUrlInput" placeholder="Enter custom URL (max 100 characters)"
+                        maxlength="100"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                    <p id="urlError" class="text-xs text-red-500 mt-1 hidden">URL is too long or invalid.</p>
+                </div>
+
+                <div class="flex justify-end space-x-3">
+                    <button id="cancelPlantBtn" class="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100">
+                        Cancel
+                    </button>
+                    <button id="addConfirmedPlantBtn" class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Add to List
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('cancelPlantBtn').onclick = () => {
+                plantDetailConfirm.classList.add('hidden');
+                searchResults.classList.remove('hidden');
+            };
+
+            document.getElementById('addConfirmedPlantBtn').onclick = () => {
+                const urlInput = document.getElementById('customUrlInput');
+                const customUrl = urlInput.value.trim();
+                const urlError = document.getElementById('urlError');
+
+                // Simple length check (already enforced by maxlength, but good to double check)
+                if (customUrl.length > 100) {
+                    urlError.textContent = 'URL must be 100 characters or less.';
+                    urlError.classList.remove('hidden');
+                    return;
+                }
+
+                urlError.classList.add('hidden');
+
+                confirmAddPlant(plant, customUrl.length > 0 ? customUrl : null);
+            };
+        }
+
+
+        /**
+         * Add a plant to the selected list, including the custom URL.
+         */
+        function confirmAddPlant(plant, customUrl) {
+            const newPlant = {
+                binomial: plant.Binomial,
+                customUrl: customUrl
+            };
             
-            const newBinomial = plant.Binomial || null;
-            if (selectedPlantBinomials.includes(newBinomial)) {
-                console.warn(`${newBinomial || 'Selected plant'} is already in the list.`);
+            // Check if plant is already selected based on binomial
+            if (selectedPlants.some(p => p.binomial === newPlant.binomial)) {
+                console.warn(`${newPlant.binomial} is already in the list.`);
             } else {
-                selectedPlantBinomials.push(newBinomial);
-                saveSelectedBinomials();
+                selectedPlants.push(newPlant);
+                saveSelectedPlants();
                 renderSelectedPlants();
             }
 
+            // Close and reset modal view
             plantModal.classList.add('hidden');
             plantSearch.value = '';
             searchResults.innerHTML = '';
+            plantDetailConfirm.classList.add('hidden');
+            searchResults.classList.remove('hidden'); // Ensure search results container is ready for next time
         }
 
         /**
          * Remove a plant from the selected list
          */
         function removePlant(binomialName) {
-            if (binomialName === "null") {
-                selectedPlantBinomials = selectedPlantBinomials.filter(b => b !== null);
-            } else {
-                selectedPlantBinomials = selectedPlantBinomials.filter(b => b !== binomialName);
-            }
-            saveSelectedBinomials();
+            selectedPlants = selectedPlants.filter(p => p.binomial !== binomialName);
+            saveSelectedPlants();
             renderSelectedPlants();
         }
 
@@ -615,31 +708,42 @@
          * Render the list of selected plants in the UI
          */
         function renderSelectedPlants() {
-            if (plantData.length === 0 && selectedPlantBinomials.length > 0) {
+            // Check if main data is loaded before trying to render details
+            if (plantData.length === 0 && selectedPlants.length > 0) {
                 console.log('Waiting for plantData to load before rendering selected list...');
-                return; 
+                return;
             }
 
             selectedPlantsList.innerHTML = ''; // Clear list
 
-            if (selectedPlantBinomials.length === 0) {
+            if (selectedPlants.length === 0) {
                 emptyListMsg.classList.remove('hidden');
             } else {
                 emptyListMsg.classList.add('hidden');
-                
-                selectedPlantBinomials.forEach(binomial => {
+
+                selectedPlants.forEach(item => {
+                    const binomial = item.binomial;
+                    const customUrl = item.customUrl; // New: Get custom URL
+
                     const plant = plantData.find(p => (p.Binomial || null) === binomial);
-                    
+
                     const li = document.createElement('li');
                     li.className = 'flex items-center justify-between bg-white p-2 border border-gray-200 rounded-md shadow-sm';
-                    
-                    const dataBinomial = binomial === null ? 'null' : binomial;
-                    
+
                     const displayName = plant ? (plant.Binomial || 'N/A') : (binomial || 'N/A (Not Found)');
+                    
+                    // Display detail based on customUrl presence
+                    const detailText = customUrl ?
+                        `<span class="text-xs text-blue-500 block truncate" style="max-width: 150px;">Custom URL: ${customUrl}</span>` :
+                        '<span class="text-xs text-gray-400 block">DB Link Used</span>';
+
 
                     li.innerHTML = `
-                        <span class="text-sm font-medium text-gray-700">${displayName}</span>
-                        <button class="remove-plant-btn text-red-500 hover:text-red-700 transition duration-150" data-binomial="${dataBinomial}">
+                        <div>
+                            <span class="text-sm font-medium text-gray-700">${displayName}</span>
+                            ${detailText}
+                        </div>
+                        <button class="remove-plant-btn text-red-500 hover:text-red-700 transition duration-150" data-binomial="${binomial}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     `;
@@ -647,7 +751,7 @@
                 });
             }
 
-            plantCountEl.textContent = selectedPlantBinomials.length;
+            plantCountEl.textContent = selectedPlants.length;
 
             document.querySelectorAll('.remove-plant-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -661,34 +765,38 @@
          */
         function resetSelectedPlants() {
             console.log('Resetting list...');
-            selectedPlantBinomials = [];
-            saveSelectedBinomials();
+            selectedPlants = [];
+            saveSelectedPlants();
             renderSelectedPlants();
         }
 
         /**
-         * Save the list of binomial strings to localStorage
+         * Save the list of selected plant objects to localStorage
          */
-        function saveSelectedBinomials() {
-            localStorage.setItem('selectedPlantBinomials', JSON.stringify(selectedPlantBinomials));
+        function saveSelectedPlants() {
+            localStorage.setItem('selectedPlants', JSON.stringify(selectedPlants));
         }
 
         /**
-         * Load the list of binomial strings from localStorage
+         * Load the list of selected plant objects from localStorage
          */
-        function loadSelectedBinomials() {
-            const storedBinomials = localStorage.getItem('selectedPlantBinomials');
-            if (storedBinomials) {
+        function loadSelectedPlants() {
+            const storedPlants = localStorage.getItem('selectedPlants');
+            if (storedPlants) {
                 try {
-                    const parsed = JSON.parse(storedBinomials);
+                    const parsed = JSON.parse(storedPlants);
                     if (Array.isArray(parsed)) {
-                        selectedPlantBinomials = parsed.filter(b => typeof b === 'string' || b === null);
+                        // Map the parsed array to ensure structure and handle old data if needed
+                        selectedPlants = parsed.map(item => ({
+                            binomial: item.binomial || (item.Binomial || 'N/A'), // Handle potential old string format or missing keys
+                            customUrl: item.customUrl || null
+                        })).filter(item => item.binomial !== 'N/A');
                     } else {
-                        selectedPlantBinomials = []; // Malformed data
+                        selectedPlants = []; // Malformed data
                     }
                 } catch (e) {
                     console.error('Failed to parse localStorage, resetting.', e);
-                    selectedPlantBinomials = []; // Corrupt JSON
+                    selectedPlants = []; // Corrupt JSON
                 }
             }
         }
@@ -711,13 +819,13 @@
          * Generate the QR labels for all selected plants
          */
         function generateLabels() {
-            console.log('--- Generating Labels ---'); 
-            console.log('Selected plants:', JSON.stringify(selectedPlantBinomials));
+            console.log('--- Generating Labels ---');
+            console.log('Selected plants:', JSON.stringify(selectedPlants));
 
             labelOutput.innerHTML = ''; // Clear previous labels
 
-            if (selectedPlantBinomials.length === 0) {
-                console.log('No plants selected. Aborting.'); 
+            if (selectedPlants.length === 0) {
+                console.log('No plants selected. Aborting.');
                 labelOutputPlaceholder.classList.remove('hidden');
                 printControls.classList.add('hidden');
                 return;
@@ -725,13 +833,13 @@
 
             // --- NEW: LIMIT ---
             const MAX_LABELS = 100; // Set a reasonable limit
-            if (selectedPlantBinomials.length > MAX_LABELS) {
+            if (selectedPlants.length > MAX_LABELS) {
                 console.error(`Too many labels. Limit is ${MAX_LABELS}.`);
                 labelOutputPlaceholder.classList.add('hidden');
                 printControls.classList.add('hidden');
                 const errorCard = document.createElement('div');
                 errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700 md:col-span-2 lg:col-span-3 text-center';
-                errorCard.innerHTML = `<p class="font-bold">Error: Too Many Labels</p><p>You have selected ${selectedPlantBinomials.length} plants. The maximum is ${MAX_LABELS} at a time. Please reduce your list and try again.</p>`;
+                errorCard.innerHTML = `<p class="font-bold">Error: Too Many Labels</p><p>You have selected ${selectedPlants.length} plants. The maximum is ${MAX_LABELS} at a time. Please reduce your list and try again.</p>`;
                 labelOutput.appendChild(errorCard);
                 return;
             }
@@ -747,23 +855,26 @@
             document.documentElement.style.setProperty('--label-bg-color', bgColor);
             document.documentElement.style.setProperty('--label-text-color', textColor);
 
-            selectedPlantBinomials.forEach((binomial, index) => {
-                
+            selectedPlants.forEach((selectedItem, index) => { // Iterate over selectedPlants objects
+
+                const binomial = selectedItem.binomial;
+                const customUrl = selectedItem.customUrl; // New: Get custom URL
+
                 try {
-                    console.log(`Processing label #${index}: ${binomial}`); 
+                    console.log(`Processing label #${index}: ${binomial}`);
 
                     const plant = plantData.find(p => (p.Binomial || null) === binomial);
 
                     if (!plant) {
-                        console.error('Skipping label: Plant not found in master data:', binomial); 
+                        console.error('Skipping label: Plant not found in master data:', binomial);
                         const errorCard = document.createElement('div');
                         errorCard.className = 'label-card bg-red-50 border-red-300 text-red-700';
                         errorCard.innerHTML = `<p class="font-bold">Error: Plant Not Found</p><p>The plant "${binomial || 'N/A'}" could not be found in the database. It may have been renamed or deleted.</p>`;
                         labelOutput.appendChild(errorCard);
-                        return; 
+                        return;
                     }
 
-                    console.log('Found plant data:', plant); 
+                    console.log('Found plant data:', plant);
 
                     const qrId = `qr-${index}`;
 
@@ -778,21 +889,21 @@
                     if (institutionName) {
                         const institutionDiv = document.createElement('div');
                         // Use center alignment and bold text
-                        institutionDiv.className = 'institution-name-box text-center font-bold text-base'; 
-                        
+                        institutionDiv.className = 'institution-name-box text-center font-bold text-base';
+
                         // ADDED: Separator line and spacing
-                        institutionDiv.style.borderBottom = `1px solid ${textColor}`; 
+                        institutionDiv.style.borderBottom = `1px solid ${textColor}`;
                         institutionDiv.style.paddingBottom = '0.5rem';
                         institutionDiv.style.marginBottom = '0.5rem';
 
                         const institutionP = document.createElement('p');
-                        institutionP.className = 'institution-name'; 
-                        institutionP.style.overflowWrap = 'break-word'; 
-                        institutionP.style.wordBreak = 'break-word'; 
+                        institutionP.className = 'institution-name';
+                        institutionP.style.overflowWrap = 'break-word';
+                        institutionP.style.wordBreak = 'break-word';
                         institutionP.textContent = institutionName;
-                        
-                        institutionDiv.appendChild(institutionP); 
-                        labelCard.appendChild(institutionDiv); 
+
+                        institutionDiv.appendChild(institutionP);
+                        labelCard.appendChild(institutionDiv);
                     }
 
                     // --- 3. Content Wrapper (Text + QR) ---
@@ -802,7 +913,7 @@
                     // --- 4. Text Content (Left Side) ---
                     const textDiv = document.createElement('div');
                     textDiv.className = 'label-text';
-                    
+
                     // --- NEW ORDER & STRUCTURE ---
                     // Binomial (Prominent)
                     const binomialDiv = document.createElement('div');
@@ -842,19 +953,19 @@
                     qrDiv.id = qrId; // Set ID for QRCode.js
                     qrDiv.className = 'label-qr-code';
                     contentWrapper.appendChild(qrDiv);
-                    
+
                     labelCard.appendChild(contentWrapper);
 
                     // --- 6. Footer (Static Text) ---
                     const footerDiv = document.createElement('div');
                     footerDiv.className = 'footer-box';
                     footerDiv.style.borderColor = textColor; // Use text color for border
-                    
+
                     const footerP = document.createElement('p');
                     footerP.className = 'footer-note';
                     // --- STATIC FOOTER TEXT ---
                     footerP.textContent = "Generated By QRit, Department of Botany Government Victoria College Palakkad Kerala India";
-                    
+
                     footerDiv.appendChild(footerP);
                     labelCard.appendChild(footerDiv);
 
@@ -864,7 +975,9 @@
                     // --- 8. Generate QR Code ---
                     // This MUST be done *after* the element is in the DOM
                     try {
-                        const qrData = plant['QR Content'] || plant.Binomial || 'No Data';
+                        // QR GENERATION LOGIC: Use customUrl if present, otherwise use DB content
+                        const qrData = customUrl || plant['QR Content'] || plant.Binomial || 'No Data';
+
                         new QRCode(qrDiv, {
                             text: qrData,
                             width: 100,
@@ -873,7 +986,7 @@
                             colorLight: bgColor,
                             correctLevel: QRCode.CorrectLevel.H
                         });
-                        console.log(`QR generated for ${plant.Binomial} with data: ${qrData}`); 
+                        console.log(`QR generated for ${plant.Binomial} with data: ${qrData}`);
                     } catch (e) {
                         console.error('QR Code generation failed:', e);
                         qrDiv.textContent = 'QR Error';
@@ -888,7 +1001,7 @@
                 }
             });
 
-            console.log('--- Label generation complete ---'); 
+            console.log('--- Label generation complete ---');
         }
 
         /**
@@ -970,14 +1083,14 @@
                 const columns = numColumnsSelectH.value;
                 const rows = numRowsSelectV.value;
 
-                console.log(`Updating print styles: ${size} ${orientation}, ${columns}x${rows}`); 
-                
-                updatePrintStyles(size, orientation, columns, rows); 
+                console.log(`Updating print styles: ${size} ${orientation}, ${columns}x${rows}`);
+
+                updatePrintStyles(size, orientation, columns, rows);
 
                 // FIX: Calling window.print() synchronously immediately after DOM manipulation.
                 console.log("Styles updated, calling window.print() synchronously...");
                 window.print();
-                
+
                 console.log("Print dialog should be open.");
 
             } catch (err) {
@@ -998,9 +1111,9 @@
             }
 
             // Temporarily adjust layout for full screenshot capture (if labels span off screen)
-            targetElement.style.maxWidth = 'none'; 
-            targetElement.style.width = 'fit-content'; 
-            
+            targetElement.style.maxWidth = 'none';
+            targetElement.style.width = 'fit-content';
+
             // Use html2canvas to render the entire output area
             html2canvas(targetElement, {
                 scale: 2, // Use higher resolution for better quality
@@ -1009,8 +1122,8 @@
                 backgroundColor: bgColorPicker.value,
             }).then(canvas => {
                 // Reset temporary styles
-                targetElement.style.maxWidth = ''; 
-                targetElement.style.width = ''; 
+                targetElement.style.maxWidth = '';
+                targetElement.style.width = '';
 
                 const link = document.createElement('a');
                 link.download = 'plant_labels_screenshot.png';
@@ -1030,15 +1143,17 @@
          */
         async function downloadLabelsAsPdf() {
             console.log("Starting PDF generation process...");
-            
+
             if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined') {
                 alert('PDF/Image libraries failed to load. Please try refreshing.');
                 return;
             }
 
-            const { jsPDF } = window.jspdf;
+            const {
+                jsPDF
+            } = window.jspdf;
             const labels = Array.from(document.querySelectorAll('.label-card'));
-            
+
             if (labels.length === 0) {
                 alert('Please generate labels before downloading a PDF.');
                 return;
@@ -1070,7 +1185,7 @@
             // Capture each label individually
             for (let i = 0; i < labels.length; i++) {
                 const label = labels[i];
-                
+
                 // Update progress
                 document.querySelector('#loading-pdf p:first-child').textContent = `Generating PDF... ${i + 1}/${labels.length}`;
 
@@ -1084,14 +1199,14 @@
 
                 const imgData = canvas.toDataURL('image/png');
                 const imgProps = doc.getImageProperties(imgData);
-                
+
                 // Calculate proportional height
                 let imgHeight = (imgProps.height * imgWidth) / imgProps.width;
 
                 const xPosition = margin + (i % numCols) * (imgWidth + gap);
-                
+
                 // Check if we need a new page (only check if it's the start of a row)
-                if (i % numCols === 0) { 
+                if (i % numCols === 0) {
                     // Estimate the height of the next row
                     if (yOffset + imgHeight + gap > pageHeight - margin && i !== 0) {
                         doc.addPage();
@@ -1099,7 +1214,7 @@
                         console.log(`Added new page for label ${i + 1}`);
                     }
                 }
-                
+
                 // Add the image to the PDF
                 doc.addImage(imgData, 'PNG', xPosition, yOffset, imgWidth, imgHeight);
 
@@ -1108,7 +1223,7 @@
                     yOffset += imgHeight + gap;
                 }
             }
-            
+
             // Clean up loading message
             document.body.removeChild(loadingMessage);
 
@@ -1116,9 +1231,7 @@
             doc.save('plant_labels.pdf');
             console.log("PDF generated and download triggered.");
         }
-
     </script>
 </body>
 
 </html>
-
