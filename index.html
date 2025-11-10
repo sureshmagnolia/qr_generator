@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plant QR Label Generator</title>
+    <title>Plant QR Label Generator V1.9</title>
     <!-- 1. Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 2. PapaParse and QRCode.js moved to end of <body> -->
@@ -85,7 +85,6 @@
         }
 
         /* --- END NEW ORDER --- */
-
 
         .label-qr-code {
             width: 100px;
@@ -360,7 +359,6 @@
                         </button>
                         <!-- END NEW DOWNLOAD BUTTONS -->
 
-
                         <!-- Original Print Button -->
                         <button id="printBtn"
                             class="w-full bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-200 shadow-sm mt-4">
@@ -434,7 +432,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-
     <script>
         // --- CONFIGURATION ---
         const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuxbNh5Y8UYVwMR752Z5rqNcPAvdzrUvfuAr_ifFcXt2UjQZ5K4xzt0jhHUd3hGFNbUtPpqSmXDxym/pub?gid=497369614&single=true&output=csv';
@@ -475,7 +472,6 @@
         const labelContainer = document.getElementById('label-container');
         const mainWrapper = document.querySelector('.max-w-7xl');
 
-
         // NEW Download DOM Elements
         const downloadPngBtn = document.getElementById('downloadPngBtn');
         const downloadPdfBtn = document.getElementById('downloadPdfBtn');
@@ -485,7 +481,6 @@
         const paperOrientationSelect = document.getElementById('paperOrientation');
         const numColumnsSelectH = document.getElementById('numColumnsH');
         const numRowsSelectV = document.getElementById('numRowsV');
-
 
         // --- INITIALIZATION ---
         // Start polling immediately to check for libraries.
@@ -517,7 +512,6 @@
             loadSelectedPlants(); // Updated function name
 
             console.log("Attempting direct fetch...");
-
             try {
                 // 1. Fetch the data directly
                 const response = await fetch(GOOGLE_SHEET_URL);
@@ -560,7 +554,6 @@
             }
         }
 
-
         /**
          * Helper function to show a persistent error message
          */
@@ -569,7 +562,6 @@
             errorMessageEl.textContent = message;
             errorEl.classList.remove('hidden');
         }
-
 
         /**
          * Set up all event listeners for the application
@@ -605,6 +597,7 @@
             downloadPngBtn.addEventListener('click', downloadLabelsAsPng);
             downloadPdfBtn.addEventListener('click', downloadLabelsAsPdf);
         }
+
 
         /**
          * Handle plant search input
@@ -670,8 +663,7 @@
             plantDetailConfirm.innerHTML = `
                 <h4 class="text-xl font-bold text-gray-800 mb-2">${displayName}</h4>
                 <p class="text-sm text-gray-600 mb-4">Common Name: ${commonName}</p>
-                
-                <div class="mb-4">
+                                <div class="mb-4">
                     <label for="customUrlInput" class="block text-sm font-medium text-gray-700 mb-1">
                         Optional Custom URL (e.g., your website link)
                     </label>
@@ -770,7 +762,6 @@
                 selectedPlants.forEach(item => {
                     const binomial = item.binomial;
                     const customUrl = item.customUrl; // New: Get custom URL
-
                     const plant = plantData.find(p => (p.Binomial || null) === binomial);
 
                     const li = document.createElement('li');
@@ -902,7 +893,6 @@
             document.documentElement.style.setProperty('--label-text-color', textColor);
 
             selectedPlants.forEach((selectedItem, index) => { // Iterate over selectedPlants objects
-
                 const binomial = selectedItem.binomial;
                 const customUrl = selectedItem.customUrl; // New: Get custom URL
 
@@ -919,7 +909,6 @@
                         labelOutput.appendChild(errorCard);
                         return;
                     }
-
                     console.log('Found plant data:', plant);
 
                     const qrId = `qr-${index}`;
@@ -1021,8 +1010,11 @@
                     // --- 8. Generate QR Code ---
                     // This MUST be done *after* the element is in the DOM
                     try {
-                        // NEW: Use customUrl, then DB Content, then Binomial. If all fail, use 'N/A DATA'.
-                        const qrData = customUrl || plant['QR Content'] || plant.Binomial || 'N/A DATA';
+                        // --- THIS IS THE CORRECTED LOGIC ---
+                        // 1. Use customUrl if it exists.
+                        // 2. Else, use the 'ShortURL' from the CSV (based on your last instruction).
+                        // 3. Else, use 'No Data'.
+                        const qrData = customUrl || plant['ShortURL'] || 'No Data';
 
                         new QRCode(qrDiv, {
                             text: qrData,
@@ -1072,7 +1064,7 @@
                         visibility: visible;
                         display: block; /* Ensures container is rendered */
                     }
-                    
+                                        
                     /* Hide non-printable UI elements within the visible container chain */
                     #controls-block, 
                     #label-output-placeholder,
@@ -1093,7 +1085,7 @@
                         padding: 0 !important;
                         background: white !important;
                     }
-                    
+                                        
                     /* Reset position for clean page flow */
                     #label-container {
                         position: relative; 
@@ -1103,7 +1095,6 @@
                         padding: 0;
                         margin: 0;
                     }
-
 
                     /* === 2. PAGE LAYOUT RULES (FIXED MARGIN) === */
                     @page {
@@ -1143,7 +1134,7 @@
                         overflow-wrap: break-word;
                         word-break: break-word;
                     }
-                    
+                                        
                     /* FIX: Lock QR Code Position */
                     .label-content-wrapper {
                         /* Force grid behavior */
@@ -1163,6 +1154,7 @@
                 }
             `;
         }
+
 
         /**
          * Handle the print button click (relies on browser permissions)
@@ -1196,6 +1188,7 @@
                 console.error("Error in handlePrint:", err);
             }
         }
+
 
         /**
          * Download all generated labels as a single PNG image.
@@ -1237,6 +1230,7 @@
             });
         }
 
+
         /**
          * Download all generated labels as a multi-page PDF document.
          */
@@ -1271,6 +1265,7 @@
             loadingMessage.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-2xl"><p class="text-lg font-semibold text-blue-600">Generating PDF... ${0}/${labels.length}</p><p class="text-sm text-gray-500">This might take a moment.</p></div>`;
             document.body.appendChild(loadingMessage);
 
+
             let yOffset = 10; // Initial vertical offset (margin)
             const margin = 10; // INCREASED margin to 10mm (approx 0.4in)
             const pageHeight = doc.internal.pageSize.getHeight();
@@ -1279,7 +1274,6 @@
             const gap = 4; // 4mm gap between labels
             const availableWidth = pageWidth - (2 * margin);
             let imgWidth = (availableWidth - ((numCols - 1) * gap)) / numCols;
-
 
             // Capture each label individually
             for (let i = 0; i < labels.length; i++) {
