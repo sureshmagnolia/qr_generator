@@ -138,3 +138,34 @@ Handles downloading labels as files.
     *   Minifies JS and CSS.
     *   Hashes filenames for cache busting (e.g., `index-a1b2c3.js`).
     *   The `dist/` folder is static and can be hosted on GitHub Pages, Netlify, or Vercel.
+
+---
+
+## 6. Function Index & Reference
+
+This section provides a complete index of all functions and constants in the codebase, explaining their specific purpose.
+
+| File | Function / Constant | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **src/config.js** | `CONFIG` | Constant | Object storing global settings (Sheet URL, Max Labels). |
+| **src/main.js** | `init()` | Async Function | The main application startup sequence. Loads data, initializes UI, and handles errors. |
+| **src/services/api.js** | `fetchPlantData()` | Async Function | Fetches and parses the CSV data from Google Sheets. Returns a Promise resolving to an array of plants. |
+| **src/services/storage.js** | `saveSelectedPlants()` | Function | Saves the current `selectedPlants` array to the browser's LocalStorage. |
+| | `loadSelectedPlants()` | Function | Retrieves and validates the `selectedPlants` array from LocalStorage. |
+| **src/ui/dom.js** | `ELEMENTS` | Constant | A dictionary object caching all `document.getElementById` references for cleaner code. |
+| | `domReady(callback)` | Function | Utility helper that executes the callback function only when the DOM is fully loaded. |
+| **src/ui/search.js** | `initSearch()` | Function | Initializes event listeners for the 'Add Plant' modal and search input. |
+| | `updateState()` | Internal Function | Persists the current selection to storage and updates the UI visualization. |
+| | `handleSearch()` | Internal Function | Triggered on input; filters the master plant list based on the user's query string. |
+| | `selectPlant(plant)` | Internal Function | Displays the details of a chosen plant in the modal and allows custom URL entry. |
+| | `confirmAddPlant()` | Internal Function | Finalizes the addition of a plant to the selected list. |
+| | `renderSelectedPlants()` | Function | Updates the sidebar list showing which plants are currently selected. |
+| **src/ui/label-gen.js** | `initLabelGenerator()` | Function | Binds the click event for the "Generate Labels" button. |
+| | `generateLabels()` | Internal Function | The main logic for creating label cards. Clears output, constructs DOM nodes, applies styles, and calls QRCode. |
+| **src/ui/print.js** | `initPrintHandler()` | Function | Binds the click event for the "Print" button. |
+| | `handlePrint()` | Internal Function | Collects print settings (size, orientation) and triggers the browser print dialog. |
+| | `updatePrintStyles()` | Internal Function | Dynamically generates a `<style>` block with `@media print` CSS rules to format the physical page. |
+| **src/ui/export.js** | `initExportHandlers()` | Function | Binds click events for the "Download PNG" and "Download PDF" buttons. |
+| | `downloadLabelsAsPng()` | Internal Function | Uses `html2canvas` to screenshot the labels and triggers a file download. |
+| | `downloadLabelsAsPdf()` | Internal Async Function | Generates a PDF using `jspdf`. Rasterizes each label individually and places them on a grid. |
+| **src/utils/formatter.js** | `formatBinomialName()` | Function | Formats a scientific name string (e.g., *Genus species*) by italicizing the first two words. |
