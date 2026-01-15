@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+}
+
+/* Base styles for the generated label card */
+.label-card {
+    border: 2px solid #1f2937;
+    /* gray-800 */
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background-color: white;
+    display: flex;
+    /* CHANGED */
+    flex-direction: column;
+    /* ADDED */
+    gap: 0.5rem;
+    /* CHANGED */
+    page-break-inside: avoid;
+    /* Avoids breaking a label during printing */
+}
+
+.label-content-wrapper {
+    /* This new wrapper holds the text and QR code */
+    display: grid;
+    grid-template-columns: 1fr 100px;
+    /* Text content | QR Code */
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+}
+
+.label-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    /* Reduced gap for new order */
+    min-width: 0;
+    /* FIX: Prevents text overflow from breaking grid */
+}
+
+/* --- NEW ORDER --- */
+.label-text .binomial-box {
+    font-weight: 700;
+    font-size: 1.125rem;
+    /* 18px */
+    line-height: 1.4;
+    text-align: center;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.label-text .family-name,
+.label-text .common-name,
+.label-text .vernacular-name {
+    font-size: 0.875rem;
+    /* 14px */
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.label-text .common-name {
+    font-family: 'Anek Malayalam', sans-serif;
+    /* Applied Anek Malayalam */
+    font-weight: 600;
+}
+
+/* --- END NEW ORDER --- */
+
+.label-qr-code {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.label-qr-code img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Footer Box */
+.footer-box {
+    border-top: 1px solid #d1d5db;
+    /* gray-300 */
+    padding-top: 0.5rem;
+    /* 8px */
+    margin-top: 0.5rem;
+    /* 8px */
+}
+
+/* MODIFIED: Footer note for QRit - Smaller and italicized */
+.footer-note {
+    text-align: center;
+    font-size: 0.45rem;
+    /* Made slightly smaller */
+    line-height: 1.2;
+    white-space: normal;
+    /* Allow wrapping */
+    opacity: 0.85;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    font-style: italic;
+    /* Added italics */
+}
